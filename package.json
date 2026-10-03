@@ -14,6 +14,7 @@
     "dev": "next dev",
     "build": "next build",
     "build:ci": "bash scripts/with-env.sh .env.ci next build",
+    "check-bundle": "bash scripts/with-env.sh .env.ci node scripts/check-bundle.ts",
     "start": "bash scripts/start.sh",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
@@ -52,6 +53,7 @@
     "msw": "^3.0.2",
     "prettier": "^3.9.9",
     "typescript": "5.9.3",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "yaml": "^2.9.1"
   }
 }

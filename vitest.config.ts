@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'test/**/*.test.ts', 'scripts/**/*.test.ts'],
     exclude: ['test/e2e/**', 'node_modules/**'],
     globalSetup: ['./test/setup/global.ts'],
     setupFiles: ['./test/setup/env.ts'],
