@@ -90,7 +90,7 @@ Each slice is demoable alone and tagged only after its gate passes. Priority: **
 | FR-5.2 | "Morning brief": prioritized summary of what needs attention, each line linking to its queue item. | M |
 | FR-5.3 | Advanced AG Grid: row grouping, master/detail evidence panel, inline sparklines, custom cell renderers for AI status and risk. | M |
 | FR-5.4 | Cost and token telemetry per session and per run, visible in the UI. | M |
-| FR-5.5 | "Reset demo" button: clears Steward state and re-seeds the sandbox fixtures. | M |
+| FR-5.5 | "Reset demo" button: starts a fresh demo round (new epoch; open Proposals expire; fresh unrefunded seed Orders topped up). Audit history is kept. Rate-limited because the demo is shared. | M |
 | FR-5.6 | Eval dashboard showing latest golden-set, injection-set, and citation results. | S |
 | FR-5.7 | Keyboard-complete approval flow; reduced-motion respected. | M |
 
@@ -99,7 +99,7 @@ Each slice is demoable alone and tagged only after its gate passes. Priority: **
 ### Security and safety
 | ID | Requirement |
 |---|---|
-| NFR-S1 | **Approval gating.** Write-capable PayPal clients are importable only from the executor module; the agent's tool set contains propose-only wrappers. Executor refuses any proposal without an approval record. |
+| NFR-S1 | **Approval gating.** The client for **Merchant-facing writes** (invoice reminders, refunds, dispute evidence/accept) is importable only from the executor module; the agent's tool set contains propose-only wrappers. The executor refuses any Proposal without an approval record. Two narrow, non-Merchant-facing exceptions exist, each in its own module and enforced by a module-graph test: (a) demo top-up (create + capture sandbox card Orders only), importable by `features/demo` and `scripts`; (b) seed and probe writes, importable by `scripts/**` only, never by app code. |
 | NFR-S2 | **Idempotency.** Every write carries a stable `PayPal-Request-Id` derived from the proposal ID; repeated approve calls are a no-op after the first success. |
 | NFR-S3 | **Webhook signature verification** via PayPal's verify-webhook-signature endpoint [9] (webhook ID from env); invalid or unverifiable requests get a 4xx and cause no side effects. |
 | NFR-S4 | **Prompt-injection containment.** Buyer text, invoice notes, and tool output are untrusted: delimited in the prompt, never concatenated into instructions, and structurally unable to cause a write (see NFR-S1). Proposal fields that name a target, amount, or recipient are validated against fetched PayPal records, not model text. |
@@ -132,7 +132,7 @@ Each ID is copied into `ACCEPTANCE.md` with pass/fail and evidence (command outp
 
 | ID | Criterion | How measured | Threshold |
 |---|---|---|---|
-| SC-1 | **No write without approval** | Integration tests + DB constraint + static import check; injection and E2E runs scanned for PayPal write calls (MSW) lacking an approval record | **0** writes without an approval record; 0 executed audit rows without an approval FK |
+| SC-1 | **No write without approval** | Integration tests + DB constraint + static import check; injection and E2E runs scanned for PayPal write calls (MSW) lacking an approval record | **0** Merchant-facing writes (reminder, refund, dispute action) without an approval record; 0 executed audit rows without an approval FK; the only unapproved app write is demo top-up Order creation (NFR-S1 exception a) |
 | SC-2 | Idempotent execution | Approve the same proposal 10x, including concurrent requests | Exactly **1** PayPal write; same `PayPal-Request-Id` on any retry |
 | SC-3 | Dispute-reason classification | Golden set of >= 40 labeled disputes covering every supported reason with >= 3 each | **>= 90%** accuracy |
 | SC-4 | Contest/accept recommendation quality | Same golden set with labeled expected decision | >= 80% agreement (assumption); each wrong case reviewed in `ACCEPTANCE.md` |
