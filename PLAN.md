@@ -114,7 +114,7 @@ flowchart LR
 | Lazy work (R23, R36) | Renders do no side effects. `/`, `/queue` schedule `after()` jobs (policy run if enabled, `reconcileStuck`, `expireDue`, `rollSimDeadlines`), each under `pg_try_advisory_lock(<job key>)`. `cron-tick.yml` calls `POST /api/cron/tick` (same jobs) and `/api/policies/run` every 30 min |
 | Standing Policy (D-3, R6) | `runPolicies` -> deterministic selection with caps -> skip any Invoice whose subject hits the open-work or in-flight index (`policy_runs.skipped += 1`) -> **template reminder, no model, no Untrusted Text** -> `createProposal(created_by='policy')` -> approve as `PolicyActor` (same one-tx claim; DB CHECK §5) -> executor. `/api/policies/run` auth: session + CSRF (Run now) **or** `x-cron-secret` |
 | Reset (R12, R19) | `POST /api/demo/reset` (session + CSRF; 1 per 15 min global, ≤ 12/day, `demo_state` row lock): bump epoch, expire old-epoch `proposed`/`failed_retryable`, top up ≤ 5 captures. `POST /api/demo/topup` is session + CSRF only, ≤ 10/day, adds captures without an epoch bump; no cron route calls it |
-| Health (R32) | `GET /api/health` -> pass/fail booleans only (no data): DB; PayPal OAuth token + one `list_invoices` read; model reachability via the models list (no generation); ≥ 2 SIM Disputes open with a deadline > 2 h away; demo budget remaining |
+| Health (R32) | `GET /api/health` -> pass/fail booleans only (no data), result cached in-process for 5 min so public GETs never fan out to PayPal/Anthropic: DB; PayPal OAuth token + one `list_invoices` read; model reachability via the models list (no generation); ≥ 2 SIM Disputes open with a deadline > 2 h away; demo budget remaining |
 
 **Routes.** Pages per DESIGN §3 (R9): `/enter`, `/` (Brief), `/queue`, `/invoices`, `/disputes`, `/risk`, `/audit`, `/policies`, `/settings`. API: `chat`, `session`, `invoices/chase`, `disputes/[id]/assess`, `risk/explain`, `refunds/propose`, `brief/refresh`, `proposals/[id]/{draft,approve,reject,retry,confirm}`, `webhooks/paypal`, `policies/run`, `cron/tick`, `demo/reset`, `demo/topup`, `health`. Risk Flags are **Attention Items, not Proposals**; `/queue` lists Proposals only. `DISPUTE_SOURCE` (`live|simulated|mixed`) is env-only; `/settings` shows it read-only.
 
@@ -154,7 +154,7 @@ Seams exist only where two adapters exist: **PayPal HTTP** (sandbox vs MSW), **d
 | `features/approvals` | `schema.ts` (R14); `createProposal`, `saveDraft(id, text, version)`, `approve(id, actor, {draftVersion, amount?})`, `reject`, `retry`, `confirmOutcome`, `listQueue`, `expireDue`, `reconcileStuck`; `propose.ts`; `EXECUTORS[kind] = {revalidate, execute(snapshot, requestId), readBack, readBackMinAge, requestIdReplaySafe}` | §5 I1–I11; refund amount editable only at approval, ≤ remainder; `listQueue` always shows `outcome_unknown` rows from any epoch outside the Expired group | Executor adapters; real Postgres; kill, unknown-retry, draft-race tests |
 | `features/invoices` | `rankOverdue` (pure, reason template); `ai/chase.ts`; `resolveReminderTarget` | Overdue only; recipient/amount from the fetched Invoice | Pure + MSW + mock |
 | `features/disputes` | `DisputeSource {list, get}`: `liveSource`, `simulatedSource` (fixtures + `sim_dispute_state`); `evidencePlan(reason)`; `ai/assess.ts`; `rollSimDeadlines(now)` | `SIM-` IDs, `source:'simulated'` end to end; simulated writer updates the overlay only; a deadline < 2 h away rolls to `now + offset`, and open Proposals for that Dispute get the same `expires_at` (R36) | Two sources, two writers; golden set |
-| `features/refunds` | `resolveRefundTarget(captureId, basis, lineItemRefs)`; `proposeRefund(orderId, basis, lineItemRefs)` (R38) | Amount by code; ≤ remainder; open Dispute on the capture -> reject | MSW |
+| `features/refunds` | `proposeRefund(orderId, basis, lineItemRefs)` (R38) resolves the order's single capture (seed Orders are single-capture; multi-capture Orders are refused) and calls internal `resolveRefundTarget(captureId, basis, lineItemRefs)` | Amount by code; ≤ remainder; open Dispute on the capture -> reject | MSW |
 | `features/risk` | `computeFlags` (pure) -> `attention_items` `risk_flag`; `ai/explain.ts` | Cites only the flag's Transaction IDs; never "fraud" | Pure + citation validator |
 | `features/brief` | `briefSnapshot(epoch)` (DB-only); `refreshAttention()`; `ai/lines.ts` | R8: first paint from DB; refresh when `refreshed_at` > 10 min or on "Refresh brief" | Pure ordering |
 | `features/webhooks` | `ingest(headers, rawBody)` | No model call, no Execution | SC-8 table tests |
@@ -236,7 +236,7 @@ Each row is one builder session, finished, tested and pushed in that session. A 
 | 0.1d Oct 7 | `seed-sandbox.ts` (FR-1.2); live `/invoices` grid (FR-1.3); **P0-3b** script on probe Disputes #2/#3 (R28) | 12 cafés' Invoices live. `pnpm seed && pnpm dev` | Chat | Seed "already exists" paths | 2nd seed creates 0; P0-3b recorded |
 | 0.1e Oct 8 | `getReadTools`; `lib/untrusted`; `lib/ai/{run,chat,ledger}`; `lib/guard` (all scopes) + `spend_days`; `/api/chat` (FR-1.4, NFR-C1, NFR-O1) | Copilot answers "which invoices are overdue?" with cited, streamed text | Propose tools | Mock-model E2E; 20-way reserve at each cap; TTL release | SC-9 `@v0.1`, SC-16 caps, SC-10 dry run; **tag v0.1** |
 
-**v0.2 Invoice chaser (3 sessions; tag Oct 17; buffer Oct 16–17: CSV export on `/audit`, R35)**
+**v0.2 Invoice chaser (3 sessions; tag Oct 17; buffer Oct 16–17)**
 
 | Session | Scope (FR) | Customer sees / demo command | Stubbed | Test seams | Exit (SC) |
 |---|---|---|---|---|---|
@@ -248,7 +248,7 @@ Each row is one builder session, finished, tested and pushed in that session. A 
 
 | Session | Scope (FR) | Customer sees / demo command | Stubbed | Test seams | Exit (SC) |
 |---|---|---|---|---|---|
-| 0.3a Oct 18 | `DisputeSource` live + simulated with `sim_dispute_state`, `rollSimDeadlines` (cron + `after()`); `/disputes` grid, countdown, urgency sort; Untrusted Text fence UI; Simulated badge (FR-3.1, 3.5, 3.6) | `DISPUTE_SOURCE=mixed pnpm dev` -> `/disputes` | Assessment, writes | One contract test over both sources; roll-forward incl. `expires_at` | SC-19 |
+| 0.3a Oct 18 | `DisputeSource` live + simulated with `sim_dispute_state`, `rollSimDeadlines` (cron + `after()`); `/disputes` grid, countdown, urgency sort; Untrusted Text fence UI; Simulated badge; CSV export on `/audit` (never-cut SC-17 Community item) (FR-3.1, 3.5, 3.6) | `DISPUTE_SOURCE=mixed pnpm dev` -> `/disputes` | Assessment, writes | One contract test over both sources; roll-forward incl. `expires_at` | SC-19 |
 | 0.3b Oct 20 | `POST /api/disputes/:id/assess` (AI-QUALITY §2.1); master/detail Evidence Packet; eval guard on `api_spend`; CI `eval-smoke` enabled; **AG Grid key decision** (FR-3.2, 3.3) | Assess -> Evidence Packet with source links, draft, Contest/Accept + confidence + fee | Dispute writes | `pnpm eval --suite golden` | SC-3, SC-4, SC-6 (disputes) |
 | 0.3c Oct 22 | Executors: provide-evidence (multipart), accept-claim, simulated writer (FR-3.4, 3.5); deadline revalidate. If no key on Oct 20: Proposal drawer replaces master/detail (DESIGN fallback) | Approve "Contest" -> PayPal or simulated result; SIM row shows "Evidence submitted (simulated)" | Refunds | **Contest ∥ Accept on one capture -> exactly 1 write**; MSW multipart; `pnpm eval --suite injection` | **SC-5**, SC-1/2 dispute kinds, SC-7 |
 | 0.3d Oct 24 | Judge calibration vs **12 human-labeled drafts** (AI-QUALITY §4.3); chat dispute propose tools; `pnpm eval --suite full` | `evals/results/latest-summary.json` committed | Refunds | Judge agreement ≥ 80% | Full pass (tag gate); **tag v0.3** |
@@ -270,7 +270,7 @@ Each row is one builder session, finished, tested and pushed in that session. A 
 | 0.5d Nov 5 | Polish only (R10): keyboard-complete approval, reduced motion, grid polish (FR-5.3, 5.7) | DEMO.md grid tour | none | Keyboard E2E; snapshots 320/768/1024/1440 | SC-17 inventory (branch per §12 R3); NFR-A1 |
 | 0.5e Nov 6 | Lighthouse, axe, Firefox/Safari smoke; fixes; full eval | Lighthouse and axe reports | none | `check-bundle.ts`; axe | SC-14 (automated part), SC-9; **tag v0.5** |
 
-After freeze: Nov 8 `ACCEPTANCE.md`, `solution-verifier` clean-checkout run (SC-10), one manual pre-submission full eval (R20); then the owner calendar (§8).
+After freeze: Nov 8 `ACCEPTANCE.md`, a pre-recording check that the pre-Nov-12 demo budget has ≥ $15 left (else record against a local build with `AI_PROVIDER=live` on the `dev` scope), `solution-verifier` clean-checkout run (SC-10), one manual pre-submission full eval (R20); then the owner calendar (§8).
 
 ## 8. Owner tasks calendar, seed and Disputes
 
@@ -278,7 +278,7 @@ After freeze: Nov 8 `ACCEPTANCE.md`, `solution-verifier` clean-checkout run (SC-
 |---|---|---|
 | Recurring | Go-ahead for each push and each production deploy | Every session |
 | Oct 4 | Read the Devpost rules page (A-1); go-ahead for public repo push and Render Blueprint deploy; set `CRON_SECRET` in the Render env group and as an Actions secret; after first deploy set `STEWARD_URL`; run the provided SQL creating `steward_eval`, add `EVAL_DATABASE_URL` (P0-6); email AG Grid for a key | 0.1a |
-| Oct 5–6 | Create `.env` (PayPal sandbox app + Anthropic key); Anthropic console limit $220 (D-11); `ANTHROPIC_API_KEY` Actions secret | 0.1c |
+| Oct 5–6 | Create `.env` (PayPal sandbox app + Anthropic key); dedicated Anthropic workspace, console limit $240 (D-11); `ANTHROPIC_API_KEY` Actions secret | 0.1c |
 | Oct 6 | File **3 probe Disputes** as the sandbox buyer | P0-7, P0-3b |
 | **Oct 20** | AG Grid key received or not -> branch decision (R10, §12 R3) | 0.3c/0.4a |
 | **Oct 23** | Label the 12 drafts for judge calibration | 0.3d |
@@ -310,7 +310,7 @@ Re-runs create nothing; `pnpm seed --check` writes nothing; seed refuses unless 
 | CSRF / auth modes | UI state changes (draft save, approve, reject, retry, confirm, reset, topup, policy Run now, propose refund) need session CSRF header + `Origin`. `cron/tick` is cron-secret only; `policies/run` accepts session + CSRF **or** cron secret (R23). `health` is public, read-only, booleans only |
 | CSP and headers | `script-src 'self' 'nonce-…' 'strict-dynamic'`; `style-src 'self' 'unsafe-inline'` (AG Grid runtime styles); `connect-src 'self'`; `frame-ancestors 'none'`; `object-src 'none'`; `base-uri 'self'`; HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy` (NFR-S6) |
 | Abuse limits | Passcode (A-10, D-4) 5/IP/10 min; every route 60/IP/min; chat 20/IP/10 min; approve 30/session/min; reset 1 per 15 min global, ≤ 12/day; topup ≤ 10/day |
-| Cost (D-11, R34) | Demo $120 ($50 before Nov 12 at ≤ $5/day; $70 after at ≤ $3/day), eval $70, dev $30, all enforced in `reserve` against `api_spend`; caps show DESIGN's "budget reached" state; Anthropic console limit $220 as outer backstop |
+| Cost (D-11, R34) | Demo $120 ($50 before Nov 12 at ≤ $5/day; $70 after at ≤ $3/day), eval $70, dev $30, all enforced in `reserve` against `api_spend`; caps show DESIGN's "budget reached" state; dedicated-workspace console limit $240 as outer backstop (monthly; in-app caps are the real enforcement) |
 | Prompt injection | Structural (ADR 0002); policy reminders and `refunds/propose` use no model and no Untrusted Text; Merchant-edited text passes the same output checks (R33) |
 | Errors | Short message + correlation id; logs carry `debug_id` (NFR-S7) |
 
@@ -323,7 +323,7 @@ Re-runs create nothing; `pnpm seed --check` writes nothing; seed refuses unless 
 | Architecture | `test/arch/module-graph.test.ts` | R18 import rules; `lib/ai/run` exclusivity |
 | E2E | Playwright on `next start` + MSW + mock model; Chromium in CI, Firefox/WebKit at 0.5e and pre-tag | `@v0.x`; axe 0 serious/critical |
 | Evals | AI-QUALITY §4 commands | Smoke per PR from 0.3b (8+8, ≤ $1); full only at v0.3/v0.4/v0.5 tags + one pre-submission run (R20) |
-| Hosted | `hosted-health.yml` weekly to Dec 15 + owner manual E2E Nov 12 and Dec 1 | SC-11 (amended) |
+| Hosted | `hosted-health.yml` daily to Dec 15 + owner manual E2E Nov 12 and Dec 1 | SC-11 (amended) |
 
 **Baselines.** SC-3 beside AI-QUALITY's filed-reason baseline; SC-4 beside "Contest when tracking shows delivered, else Accept"; same golden set, scoring per AI-QUALITY §4.3.
 **Observability (NFR-O1).** pino JSON logs via `redact()` (request id, route, proposal id, `debug_id`, latency); `ai_runs` per model call; `/api/health`; telemetry panel reads `ai_runs` and `api_spend` (`scope='demo'`).
@@ -337,7 +337,7 @@ Re-runs create nothing; `pnpm seed --check` writes nothing; seed refuses unless 
 | `ci.yml`: `eval-smoke` | PR from this repo when `ANTHROPIC_API_KEY` and `EVAL_DATABASE_URL` exist (from 0.3b) | `pnpm eval --suite smoke --budget-usd 1`; `concurrency: eval-spend` |
 | `eval-nightly.yml` | Nightly, only if `src/lib/ai/**`, `src/lib/untrusted/**`, `src/features/*/ai/**`, `src/features/approvals/schema.ts` or `evals/**` changed, **at most 6 nightly runs in total** (counted in `api_spend` by `run_id` prefix `nightly-`); plus `workflow_dispatch` | Nightly: `golden`. Dispatch: `full` (tag gates, pre-submission) or `golden`. `concurrency: eval-spend`; every run checks the $70 eval cap |
 | `cron-tick.yml` | Every 30 min | `POST /api/cron/tick`, `POST /api/policies/run` with `x-cron-secret` |
-| `hosted-health.yml` (from 0.5b) | Weekly + `workflow_dispatch`; skips itself after 2026-12-15 | `GET $STEWARD_URL/api/health` (all checks true) and `GET $STEWARD_URL/enter` (200) |
+| `hosted-health.yml` (from 0.5b) | **Daily** + `workflow_dispatch`; skips itself after 2026-12-15; a failure opens a GitHub issue (owner notified; SIM Disputes below 2 -> owner presses Reset) | `GET $STEWARD_URL/api/health` (all checks true) and `GET $STEWARD_URL/enter` (200) |
 
 Deploy: `render.yaml` (web, Postgres `basic-256mb`, env group), `autoDeployTrigger: checksPass` (fallback P0-6). `scripts/start.sh` migrates then starts. Each push and production deploy needs the project owner's go-ahead (§8).
 
@@ -372,3 +372,4 @@ Deploy: `render.yaml` (web, Postgres `basic-256mb`, env group), `autoDeployTrigg
 | 3 | 2026-10-03 | Critic 77/100; R16–R25 (N1–N14): `subject_ref` table, `outcome_unknown` + in-flight index, three write modules, reset caps, $90 eval guard, P0-3a/b, spend locks, `after()` + advisory locks, policy CHECK, 19 sessions, `sim_dispute_state`. |
 | 4 | 2026-10-03 | Critic 84/100; R26–R31 (M1–M5, m1–m10): SIM deadline roll, `eval_spend`, P0-3b in 0.1d, SC-17 per branch, demo caps, retry/read-back refinements, `refunds/propose`, owner calendar. |
 | 5 | 2026-10-03 | Critic 80/100; R32–R39 (P1–P5, s1–s7, M5/m7 partials), subtractive. **R32** deleted `smokeLogin`, the `smoke` actor, `SIM-SMOKE`, the write-performing hosted smoke, cron-driven topup and the `DEMO_PASSCODE` secret; added read-only `hosted-health.yml` + `/api/health` checks and owner manual E2E Nov 12 / Dec 1 (SC-11 amended); `topup` session-only. **R33** `draft_original`/`draft_current`/`draft_version`, version-checked save and approve claim, executor sends only the approval snapshot, output checks on Merchant text (I11, draft-race test). **R34** `eval_spend` -> one `api_spend` ledger (demo/eval/dev) with sequence grant; caps demo $120 ($50/$70), eval $70, dev $30; `AI_PROVIDER=mock` default; abort on ledger failure; `concurrency: eval-spend`; ≤ 6 nightly runs; role check in P0-6. **R35** reserved demo Dispute Nov 1–2, live evidence check in 0.5c, batch approve cut, CSV export in the Oct 16–17 buffer, health in 0.5b. **R36** SIM roll also rolls `expires_at`; runs in cron and `after()` at < 2 h. **R37** Merchant "It didn't happen" = definitive absence. **R38** `refunds/propose` via `get_order` with ledger refs, no model, no explanation line. **R39** calendar adds `STEWARD_URL`, Render `CRON_SECRET`, recurring push/deploy go-aheads; projected scores removed. |
+| 5b | 2026-10-03 | Critic round 5: **91/100 PASS**. Orchestrator applied the 8 minor follow-ups: FR-2.6 marked cut; CSV export scheduled in 0.3a; `/api/health` cached 5 min; health daily with issue on failure; dedicated Anthropic workspace, console limit $240; pre-recording budget check; DESIGN duplicate-risk line on "It didn't happen"; refund naming clarified. |

@@ -374,7 +374,7 @@ The Merchant owns their own wording. Only the checks that stop links, contacts a
   | `eval` | $70 (§4.3) |
   | `dev` (local live-model work) | $30 |
 
-  The worst case is ≈ $220, which is also the Anthropic console limit.
+  The worst case is ≈ $220; the key sits in a dedicated workspace with a $240 console limit (monthly) as backstop.
 - **Mock by default:** `AI_PROVIDER=mock` is the default in `.env.example`, so nothing spends unless a live provider is chosen.
 - **Health check (R32):** the weekly `hosted-health.yml` makes **no generation call**. `/api/health` only checks that the models list is reachable.
 - **Prices** were verified on Anthropic's own pricing page (`docs.claude.com/en/docs/about-claude/pricing`) on **2026-10-03**. They are held as config constants (`MODEL_PRICES` with `PRICES_VERIFIED_AT = '2026-10-03'` in `lib/ai/models`, PLAN §6), and `cost_usd` is computed from them. Per MTok:

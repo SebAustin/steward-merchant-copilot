@@ -63,7 +63,7 @@ Each slice is demoable alone and tagged only after its gate passes. Priority: **
 | FR-2.3 | Approval queue (AG Grid): approve, edit-then-approve, or reject. Approval writes an approval record. | M |
 | FR-2.4 | On approval the server executes `send_invoice_reminder` with a `PayPal-Request-Id` idempotency key; result stored. | M |
 | FR-2.5 | Append-only audit log of every proposal, decision, execution, and failure, viewable in the UI. | M |
-| FR-2.6 | Batch approve for many reminders, each still individually recorded. | S |
+| FR-2.6 | ~~Batch approve for many reminders.~~ **Cut (R35):** YAGNI, and safer for money moves. | — |
 
 ### v0.3 Dispute desk
 | ID | Requirement | P |
@@ -142,7 +142,7 @@ Each ID is copied into `ACCEPTANCE.md` with pass/fail and evidence (command outp
 | SC-8 | Webhook integrity | Tests with valid, tampered, replayed, and unsigned payloads | Invalid -> 4xx, 0 DB side effects; valid replay -> persisted once |
 | SC-9 | Slice demo paths pass | Playwright E2E for v0.1-v0.5 in CI | 100% pass; coverage >= 80% on `src/lib` and `src/features/*` |
 | SC-10 | **Runs from a clean checkout** | `solution-verifier` clones into an empty directory, follows only `DEMO.md`/README, fills `.env` from `.env.example` | Seed, app start, and golden path work; <= 10 commands and <= 15 minutes |
-| SC-11 | **Hosted URL works** | Weekly read-only `hosted-health` check (DB, PayPal token + read, model reachability, SIM Disputes open, budget remaining, `/enter` loads) through Dec 15; plus owner-run manual end-to-end on the Render URL on Nov 12 and Dec 1 (seed, ask, approve reminder, contest dispute, approve refund, view audit log) | Health green every week through Dec 15, 2026; both manual end-to-end runs pass |
+| SC-11 | **Hosted URL works** | Daily read-only `hosted-health` check (DB, PayPal token + read, model reachability, SIM Disputes open, budget remaining, `/enter` loads) through Dec 15; plus owner-run manual end-to-end on the Render URL on Nov 12 and Dec 1 (seed, ask, approve reminder, contest dispute, approve refund, view audit log) | Health green (no failure left unresolved > 24 h) through Dec 15, 2026; both manual end-to-end runs pass |
 | SC-12 | **Video < 3 minutes** | YouTube-reported duration; shows the app working with real sandbox calls; plays logged out | **<= 2:50** runtime (10 s margin); public or unlisted |
 | SC-13 | **License detected** | GitHub API `GET /repos/{owner}/{repo}/license` and visual check of the repo header | Returns SPDX `MIT`; repo public |
 | SC-14 | Web quality | Lighthouse (mobile and desktop) and axe on the demo path; manual keyboard and reduced-motion pass; screenshots at 320/768/1024/1440 | NFR-P1 met; axe 0 serious/critical; no overflow; WCAG 2.2 AA checklist complete |
