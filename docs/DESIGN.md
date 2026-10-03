@@ -126,20 +126,20 @@ Grid features, where they appear, and the slice they land in (R10; SC-17 invento
 | Feature | Where | Slice | Edition |
 |---|---|---|---|
 | Custom cell renderers: risk pill, AI status, deadline countdown, money, action buttons, Untrusted Text fence | Queue, Disputes, Risk | 0.2+ | Community |
-| Row grouping by Proposal kind with group aggregates (count, sum); status bar (selected count and sum) | Queue | 0.2 | Enterprise |
+| Row grouping by Proposal kind with group aggregates (count, sum); status bar (row count, total at stake) | Queue | 0.2 | Enterprise |
 | Master/detail: Evidence Packet in the detail row | Disputes, Queue | 0.3 | Enterprise |
 | Sparkline column: customer payment history (12 months) | Queue, Invoices, Risk | 0.4 | Enterprise |
 | **One** integrated chart: "Cash at risk by Attention Item type" | `/risk` only | 0.4 | Enterprise |
 | Set filter (kind, risk, status) | Queue, Risk | 0.2 | Enterprise |
-| Quick filter (`/`), text and number column filters; pinned action column; row selection | all grids | 0.2+ | Community |
+| Quick filter (`/`), text and number column filters; pinned action column | all grids | 0.2+ | Community |
 | Full keyboard navigation and custom hotkeys | all grids | 0.2+ | Community |
 | **Inline cell editing** of a Proposal's draft text (see section 6) | Queue | 0.2 | Community |
 | **CSV export** of the filtered rows ("Export CSV") | `/audit` | 0.2 | Community |
 
-Honest count (R29): **Enterprise-only (6):** grouping, status bar, master/detail, sparkline column, integrated chart, set filter. **Community (6 distinct):** custom renderers, quick and column filters, pinned columns with row selection, keyboard navigation, inline draft editing, CSV export. The inline-SVG sparkline in the fallback is a custom renderer and is not counted again. **SC-17 (">= 5 advanced features") holds in both branches:** with the key, 12 features; without it, 6 Community features. In the fallback, kind and risk filtering use filter chips above the grid instead of the set filter.
+Honest count (R29): **Enterprise-only (6):** grouping, status bar, master/detail, sparkline column, integrated chart, set filter. **Community (6 distinct):** custom renderers, quick and column filters, pinned columns, keyboard navigation, inline draft editing, CSV export (batch approve and row selection are cut, so neither is counted). The inline-SVG sparkline in the fallback is a custom renderer and is not counted again. **SC-17 (">= 5 advanced features") holds in both branches:** with the key, 12 features; without it, 6 Community features. In the fallback, kind and risk filtering use filter chips above the grid instead of the set filter.
 
 0.5d is polish only. **AG Grid key decision date: Oct 20.** If no Enterprise key has arrived, the Community fallback becomes the design (not an apology), and the demo is recorded with it:
-- Grouping: a "Group by kind" sectioned view using full-width section rows (kind, count, sum) and a footer strip for the selection total.
+- Grouping: a "Group by kind" sectioned view using full-width section rows (kind, count, sum) and a footer strip for the total at stake.
 - Master/detail: the Proposal drawer. Sparklines: an inline-SVG cell renderer, so they still show.
 - Chart: replaced by a static sparkline-style summary (three horizontal bars of cash at risk by type, drawn as SVG, with the figures printed). Never ship a watermark in the recorded demo.
 
@@ -155,7 +155,7 @@ Masthead (56px, sticky): wordmark "Steward" (Fraunces italic) with "Ember & Oak 
 | Invoices | `/invoices` | Overdue Invoices with aging and history sparkline | Invoices |
 | Disputes | `/disputes` | Dispute list with Response Deadline; Evidence Packet detail | Disputes |
 | Transactions & Risk | `/risk` | Transaction Search grid, Risk Flags with explanations, the one integrated chart | Transactions, Risk Flags |
-| Audit Log | `/audit` | Append-only Audit Entries; filter; Export CSV. Weekly hosted-smoke entries show actor "Hosted check" (never the raw `smoke` id; muted, with a "Hide Hosted check" chip). `SIM-SMOKE` never appears in any judge-facing grid or label. | Audit Entries |
+| Audit Log | `/audit` | Append-only Audit Entries; filter; Export CSV | Audit Entries |
 | Standing Policies (v0.5) | `/policies` | Off by default; invoice reminders only; caps; skip counts | Standing Policies |
 | Settings / Demo | `/settings` | Dispute source (read-only), Reset demo, telemetry, sign out | Demo state |
 | Copilot | docked panel on every page | Ask, stream, cite, create Proposals | Chat |
@@ -249,20 +249,20 @@ Left column max 760px, hero in Fraunces display (opsz 144); ruled rows, no boxes
 +--------------------------------------------------------------------------+-----------------------+
 | Approval Queue   6 Proposals  $4,812.40      [/ Filter...] [Group: Kind v]| COPILOT (380px,       |
 |--------------------------------------------------------------------------| collapsible)          |
-|[ ] STATUS   SUBJECT            RISK    AMOUNT   DEADLINE HISTORY RECOMMENDS ACTIONS (pinned)      |
+| STATUS   SUBJECT            RISK    AMOUNT   DEADLINE HISTORY DRAFT/RECOMMENDS ACTIONS (pinned)     |
 | v DISPUTE RESPONSES  2                      $1,420.00                                              |
-|#[ ] Ready    Dana R. DSP-9921   (*)HIGH  $48.00   1d 04h |.:||:|.  Contest  [Approve][Reject] >    |
+|# Ready    Dana R. DSP-9921   (*)HIGH  $48.00   1d 04h |.:||:|.  Contest  [Approve][Reject] >      |
 |  |  detail row: Evidence Packet (Order | Shipping | Invoice | History) + draft + fence |           |
-|#[ ] Drafting Kim L.  DSP-9930   (o)MED   $1,372   4d 02h |:|.||:   Accept   [Approve][Reject] >    |
+|# Drafting Kim L.  DSP-9930   (o)MED   $1,372   4d 02h |:|.||:   Accept   [Approve][Reject] >      |
 | v INVOICE REMINDERS  3                      $2,960.00                                              |
-|#[ ] Ready    Maple St Cafe INV-0042 (o)MED $1,240.00 Overdue 21d |.|:||  Remind [Approve][Reject] >|
+|# Ready    Maple St Cafe INV-0042 (o)MED $1,240.00 Overdue 21d |.|:||  Remind [Approve][Reject] >  |
 | v REFUNDS  1                                  $432.00                                              |
-|[ ] Ready     Pat T. #1177  Full   (o)MED  $432.00   -   |:.|||  Refund  [Approve][Reject] >       |
+|  Ready    Pat T. #1177  Full   (o)MED  $432.00   -   |:.|||  Refund  [Approve][Reject] >         |
 |              Cites Risk Flag: repeat refunds (view on Risk)                                        |
 | > Unconfirmed  1  (stays after a reset; Ember rule; Check again)                                   |
 | > Earlier round (Expired)  4  - collapsed                                                          |
 |--------------------------------------------------------------------------------------------------|
-| status bar: Selected 0 / $0.00  |  Decided today 3  |  Rows 6                                      |
+| status bar: Rows 6  |  At stake $4,812.40  |  Decided today 3                                        |
 +--------------------------------------------------------------------------+-----------------------+
  # = Ember margin rule (needs you).  Actions pinned right; Subject pinned left on narrow screens.
  Hotkeys when a cell is focused: arrows move, Enter open drawer, A approve, R reject, E expand detail, / filter, ? help.
@@ -327,8 +327,8 @@ Steward's text is serif; the user's is mono. Tool activity lines are collapsed b
 ## 6. Component specs
 
 **Proposal row anatomy (Queue, Disputes, Invoices share it; the Brief uses a lighter one-line Attention Item)**
-`[select] [margin rule] [AI status] [kind + subject (Fraunces 500, name; mono ID beneath)] [risk pill] [money] [deadline] [history sparkline] [recommends] [actions]`
-- States: default; hover (`signal-wash` 50%); focus-visible (`focusShadow`); selected (`signal-wash` + checkbox); new (wash + "New" chip 8 s, fades via opacity); decided (muted, no margin rule, stamp); executing (actions replaced by "Sending..."); checking ("Checking PayPal..."); unconfirmed (Ember margin rule stays, subject locked, actions Check again / I checked PayPal); failed-can-retry (Approve becomes **Try again**, plus **Drop**); failed-final ("Not done", no actions); expired (muted stamp, no actions, tooltip "This round was reset. Nothing was sent."); drafting (actions `aria-disabled`, reason as tooltip).
+`[margin rule] [AI status] [kind + subject (Fraunces 500, name; mono ID beneath)] [risk pill] [money] [deadline] [history sparkline] [recommends] [actions]`
+- States: default; hover (`signal-wash` 50%); focus-visible (`focusShadow`); active row (`signal-wash`); new (wash + "New" chip 8 s, fades via opacity); decided (muted, no margin rule, stamp); executing (actions replaced by "Sending..."); checking ("Checking PayPal..."); unconfirmed (Ember margin rule stays, subject locked, actions Check again / I checked PayPal); failed-can-retry (Approve becomes **Try again**, plus **Drop**); failed-final ("Not done", no actions); expired (muted stamp, no actions, tooltip "This round was reset. Nothing was sent."); drafting (actions `aria-disabled`, reason as tooltip).
 - Actions: **Approve** (Ember fill, signal-ink text, 32px desktop / 44px coarse, check glyph) and **Reject** (ghost, line-strong border). Hover: Approve goes `signal-strong`; active: translateY(1px); focus: `--focus-ring`; disabled: 45% opacity plus reason. Specific names: `aria-label="Approve: refund $48.00 to Dana R."`.
 - Content: subject is a person or business name, never a raw ID alone; one line, ellipsis with `title`.
 
@@ -343,7 +343,7 @@ Steward's text is serif; the user's is mono. Tool activity lines are collapsed b
 
 Glyph fill plus word survives grayscale and forced colors. `title`: the reason in one sentence ("Third dispute from this customer in 90 days"). A Risk Flag reads "Risk Flag - Medium". Interactive (explanation popover) only on `/risk`.
 
-**Money formatting rule.** One formatter (`Intl.NumberFormat`, `en-US`, currency from the record) everywhere. Plex Mono, `font-variant-numeric: tabular-nums slashed-zero`, right-aligned in grids (header too), always two decimals, thousands separators, symbol attached (`$1,240.00`), negatives and refunds use a true minus (U+2212) so sign is not color-only, non-USD shows the code (`EUR 48.00`). In prose, wrap amounts in a mono span. Group rows show the sum in bold; the status bar sums the selection. Never abbreviate ($1.2k) where money moves. Amounts on Proposals are computed by code, never typed by the model.
+**Money formatting rule.** One formatter (`Intl.NumberFormat`, `en-US`, currency from the record) everywhere. Plex Mono, `font-variant-numeric: tabular-nums slashed-zero`, right-aligned in grids (header too), always two decimals, thousands separators, symbol attached (`$1,240.00`), negatives and refunds use a true minus (U+2212) so sign is not color-only, non-USD shows the code (`EUR 48.00`). In prose, wrap amounts in a mono span. Group rows show the sum in bold; the status bar shows the total at stake. Never abbreviate ($1.2k) where money moves. Amounts on Proposals are computed by code, never typed by the model.
 
 **Deadline countdown renderer.** `2d 04h` (>= 24h), `5h 12m` (< 24h), `38m` (< 1h); invoices read `Overdue 21d`. Tiers: > 72h ink-muted; <= 72h ink 600 with Ember underline; <= 24h Ember 600 with clock glyph; <= 4h Ember outline chip. `title` and `aria-label` carry the absolute time: "Respond by Oct 9, 2026, 5:00 pm Pacific. 1 day 4 hours left." Ticks every 60 s, not a live region, no pulsing. Sort value is the timestamp. After the Response Deadline: "Closed. Decided for the customer by PayPal."
 
@@ -361,10 +361,9 @@ Steward picks the basis (Full / Items / Shipping only) and the line items; **cod
 
 **Draft text editing in the grid (Community cell editing).** The queue's "Draft" column previews the reminder or dispute-response text. *Only* that column is editable, and only while the row is Ready or Needs your edit. Subject, recipient, kind and amounts are never editable in the grid; a refund amount can only be lowered in the Approval step (above).
 - Open: Enter or F2 on the focused cell (or double-click) opens a large-text editor popup; the cell's accessible name is "Draft text, editable. Press Enter to edit." Save with Ctrl/Cmd+Enter or by tabbing out; Esc cancels and restores the text. The editor announces "Editing draft. Control Enter saves, Escape cancels." (Confirm exact key handling of the large-text editor in a spike.)
-- Result: a saved change shows the **"Edited by you"** chip in the cell, a polite "Draft saved, marked edited by you", and **Restore Steward's draft**. The confirm dialog shows the diff, and the Audit Entry records the edited field. Empty text or over-length is refused inline ("A draft can't be empty."); a failed save keeps your text. An unchanged edit adds no mark. Locked once Executing.
-- Mobile list mode: the same edit opens as the drawer textarea ("Edit draft" button).
+- Result: a saved change shows the **"Edited by you"** chip in the cell, a polite "Draft saved, marked edited by you", and **Restore Steward's draft**. The confirm dialog shows the diff, and the Audit Entry records the edited field. Empty or over-length text is refused inline ("A draft can't be empty."). Your text must also pass the same output checks as Steward's: if it contains a link, an email address that isn't allowed, or an unfilled placeholder, the save is **blocked** with one inline message, e.g. "This draft can't be saved: it contains a link. Remove it and save again." A failed save keeps your text. An unchanged edit adds no mark. Locked once Executing. On mobile the same edit opens as the drawer textarea ("Edit draft" button).
 
-**Propose refund (deterministic).** On a captured Order or Transaction row in `/risk` (action column, and the Order detail drawer, hotkey `P`), **Propose refund** builds a refund Proposal in code (basis Full by default, amount computed from the Order, refundable remainder shown). No AI drafting is needed; Steward may add a short explanation line, labeled as Steward's, if available. It lands in the Refunds group and still needs Approval like any other Proposal. Disabled with a reason when open work exists ("There's already open work on this Order. Open it."). Feedback: "Refund Proposal added to your queue. Nothing is sent until you approve."
+**Propose refund (deterministic).** On a captured Order or Transaction row in `/risk` (action column, and the Order detail drawer, hotkey `P`), **Propose refund** builds a refund Proposal in code (basis Full by default, amount computed from the Order, refundable remainder shown). No model call is involved, so there is no explanation line. It lands in the Refunds group and still needs Approval like any other Proposal. Disabled with a reason when open work exists ("There's already open work on this Order. Open it."). Feedback: "Refund Proposal added to your queue. Nothing is sent until you approve."
 
 **Approval confirm dialog** (`role="alertdialog"`, modal, focus trapped, initial focus on *Cancel* so Enter can't approve by reflex; Esc cancels; 480px, `--radius-sheet`, `--shadow-dialog`; bottom sheet on mobile)
 ```
@@ -377,7 +376,7 @@ Steward picks the basis (Full / Items / Shipping only) and the line items; **cod
 |  [ Cancel ]        [ Refund $48.00 to Dana R. ]
 +----------------------------------------------+
 ```
-Three consequence tiers, same layout: *Moves money* (refund, accept Dispute): "...can't be undone." *Submits evidence* (contest): "Once Steward submits this, you can't change it." *Contacts a customer* (reminder): "PayPal will email Maple St Cafe. A sent reminder can't be recalled." The primary button repeats verb, amount and payee; Ember fill appears only here and on the row Approve. After confirm the body swaps in place through loading, success, or the three error outcomes (flow c). Edit-then-approve shows the diff of the edited draft above the consequence line.
+Three consequence tiers, same layout: *Moves money* (refund, accept Dispute): "...can't be undone." *Submits evidence* (contest): "Once Steward submits this, you can't change it." *Contacts a customer* (reminder): "PayPal will email Maple St Cafe. A sent reminder can't be recalled." The primary button repeats verb, amount and payee; Ember fill appears only here and on the row Approve. After confirm the body swaps in place through loading, success, or the three error outcomes (flow c). Edit-then-approve shows the diff of the edited draft above the consequence line. The dialog is bound to the draft version you saw: if the draft changed since (another tab, or a new edit), Approve sends nothing, shows "This draft changed. Review it again." and reloads the diff. Steward sends exactly the text you reviewed.
 
 **Empty states** (a serif sentence, one mono hint, one action; flat ruled coffee-scale illustration, no mascots)
 | Where | Copy | Action |
@@ -394,7 +393,7 @@ Three consequence tiers, same layout: *Moves money* (refund, accept Dispute): ".
 
 **Settings / Demo** (`/settings`). Read-only "Dispute source: Simulated (set by the DISPUTE_SOURCE environment setting; it can't be changed here)", showing Live / Simulated / Mixed. Telemetry (tokens, cost per session), **Reset demo**, sign out. Reset dialog: "Start a fresh demo round?" / **"This resets the demo for everyone viewing it."** / "Starts a fresh demo round. History stays in the Audit Log. Open Proposals from the previous round show as Expired. Anything Unconfirmed stays in your queue, because PayPal may have done it." Buttons **Cancel** and **Start fresh round**. Resets are rate-limited, so the Reset button has a cooldown state: disabled, label "Available again in 12 min" (counts down each minute, polite status on change, reason in `aria-describedby`); at the daily limit it reads "Daily reset limit reached. Available again tomorrow." Afterward the queue shows the old Proposals in a collapsed "Earlier round (Expired)" group. Old-round `outcome_unknown` rows are *not* in that group: they stay visible and actionable in their own "Unconfirmed" group (above the kind groups, expanded, Check again and the two Merchant confirmations available) until settled.
 
-**Toasts and inline results.** Decisions report *in place* (dialog, then row stamp); toasts only for background events and batch results. Region bottom-left (bottom-center on mobile), max 3, `role="status"` for success/info, auto-dismiss 6 s and pause on hover/focus; errors use `role="alert"`, never auto-dismiss, always carry a next step. Slide in via transform+opacity; reduced motion: opacity only. Examples: "3 reminders sent. 3 Audit Entries recorded." / "1 of 3 didn't go through. Maple St Cafe's reminder was not sent. [Review]". Inline errors: ink text with a berry left rule and a leading glyph, `aria-live="polite"`.
+**Toasts and inline results.** Decisions report *in place* (dialog, then row stamp); toasts only for background events (webhook work, Standing Policy runs). Region bottom-left (bottom-center on mobile), max 3, `role="status"` for success/info, auto-dismiss 6 s and pause on hover/focus; errors use `role="alert"`, never auto-dismiss, always carry a next step. Slide in via transform+opacity; reduced motion: opacity only. Examples: "Standing Policy sent 3 reminders. 3 Audit Entries recorded." / "1 of 3 didn't go through. Maple St Cafe's reminder was not sent. [Review]". Inline errors: ink text with a berry left rule and a leading glyph, `aria-live="polite"`.
 
 ## 7. UX copy guidelines
 
