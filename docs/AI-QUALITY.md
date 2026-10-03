@@ -1,12 +1,17 @@
 # AI-QUALITY: the applied-AI bar for Steward
 
 Owner: AI PM. Audience: `builder` (implements against this), `security-auditor`, `architect`.
-Inputs: `REQUIREMENTS.md` (SC-3..SC-7, SC-16, NFR-S4, NFR-C1..C3), `ASSUMPTIONS.md` §3, `CONTEXT.md` (terms used as defined), ADR 0001/0002.
-Verified 2026-10-03 against `ai@7.0.127`, `@ai-sdk/anthropic@4.0.71`, and Anthropic model/pricing docs. Re-verify model behavior and prices before you change routing.
+Inputs: `REQUIREMENTS.md` (SC-3..SC-7, SC-16, NFR-S4, NFR-C1..C3), `ASSUMPTIONS.md` §3, `CONTEXT.md` (terms used as defined), ADR 0001/0002, and `docs/PLAN-DECISIONS-R1.md`. Rulings R1–R15 there are binding.
+Owns (R1): models, routing, prompts, the Untrusted Text format, the evidence-ref grammar, eval commands, budgets, and CI eval policy. Routes, pages and copy belong to DESIGN.md; architecture, data model and slices belong to PLAN.md.
+API facts verified 2026-10-03 against `ai@7.0.127` and `@ai-sdk/anthropic@4.0.71`. Prices were verified the same day (§6). Re-verify both before you change routing.
+Code locations (R14):
+- AI code lives in `src/lib/ai/**` (models, agent, propose, ledger, prompts) and `src/features/*/ai/**` (per-feature pipelines).
+- Untrusted Text handling lives in `src/lib/untrusted/**`.
+- Proposal zod schemas live in `src/features/approvals/schema.ts`.
 
 > **Version facts the build must respect.**
 > - AI SDK 7 renamed some APIs. `system` is now `instructions`, and `maxSteps`/`stepCountIs` are now `stopWhen: isStepCount(n)`. `onFinish` is now `onEnd`. `usage` now sums all steps, and cache tokens are reported in `usage.inputTokenDetails.cacheReadTokens` and `cacheWriteTokens`.
-> - `claude-sonnet-5-5` and `claude-opus-5-5` return a 400 error for any non-default `temperature`/`top_p`/`top_k`, for assistant prefill, and for forced `tool_choice`. Risk R5's "temperature 0" mitigation is therefore available only on `claude-haiku-4-5-20251001`. On the 5.5 models we get determinism from structured outputs, strict tools, code validators and repeated eval runs.
+> - `claude-sonnet-5-5` and `claude-opus-5-5` return a 400 error for any non-default `temperature`/`top_p`/`top_k`, for assistant prefill, and for forced `tool_choice`. No Sonnet or Opus call sets `temperature`; that includes chat (`src/lib/ai/agent`). Only `claude-haiku-4-5-20251001` takes `temperature: 0`. Elsewhere, determinism comes from structured outputs, strict tools, code validators and repeated eval runs (REQUIREMENTS R5 no longer relies on temperature).
 
 ## 1. AI-fit judgment
 
@@ -17,13 +22,14 @@ Verified 2026-10-03 against `ai@7.0.127`, `@ai-sdk/anthropic@4.0.71`, and Anthro
 | Rank Overdue Invoices (FR-2.1) | **Code** | Weighted score of amount, days overdue and the Customer's late-payment count. The "stated reason" is a template built from the score parts (e.g. "$1,240 · 34 days overdue · 2 prior late payments"). No model call is needed. |
 | Response Deadline math, countdowns, Invoice due dates | **Code** | From `seller_response_due_date` / `due_date`, in UTC, with unit tests at the boundaries. |
 | Risk Flag signals (refund spike, repeat disputer, high-value first Order) | **Code** | Deterministic thresholds (FR-4.2). The Proposal's `risk_level` is also derived by code from amount and Risk Flags. |
-| Money: amounts, currency, dispute fee, refund totals | **Code, from PayPal data** | The model writes placeholders (`{{amount}}`, `{{currency}}`, `{{invoice_number}}`, `{{due_date}}`, `{{response_deadline}}`, `{{dispute_fee}}`). The server renders them from fetched records. A partial refund is chosen as a *basis* (`full`, `items` + line refs, `shipping_only`), and code computes the total. The Merchant may edit the amount at Approval. |
+| Money: amounts, currency, dispute fee, refund totals | **Code, from PayPal data** | The model writes placeholders (`{{amount}}`, `{{currency}}`, `{{invoice_number}}`, `{{due_date}}`, `{{response_deadline}}`, `{{dispute_fee}}`). The server renders them from fetched records. A partial refund is chosen as a *basis* (`full`, `items` + line refs, `shipping_only`), and code computes the total. The Merchant may edit the amount **only at Approval**. The edit is recorded in `approvals.edited_fields` and capped at the refundable remainder (R5). |
 | Gathering Evidence Packet candidates | **Code** | A fixed fetch plan per dispute reason: the Order, shipment tracking, refund Transactions, Invoice and Customer history. Retrieval is by ID, so there is **no RAG and no vector DB** (NG7). The data per item is small and structured. |
 | Effective dispute reason (SC-3) | **AI** (Haiku 4.5 if it clears the bar, else Sonnet 5.5) | The model interprets the Customer's messages against the filed `reason`. The eval reports a **filed-reason baseline** ("copy `dispute.reason`"). If the baseline already scores ≥ 90%, the classifier is not earning its keep, and we say so. |
 | Evidence Packet relevance and per-item explanation | **AI** | Picks which candidates support the response and explains why. It cannot add items that were not fetched. |
 | Contest/Accept recommendation and cost trade-off prose (SC-4) | **AI** (Opus 5.5) | Code supplies computed hints: tracking delivered and address match, refund already issued, fee, and amount at stake. The model weighs them. A guard downgrades confidence to `low` when a contest has no evidence of the type that reason requires. |
 | Dispute responses, invoice reminders, Customer notes | **AI** | Tone and wording only. Code bounds the tone: `firm` requires ≥ 15 days overdue, and `final` requires the Merchant to choose it. |
-| Risk Flag explanations, Brief lines | **AI, with template fallback** | Code orders the Brief by urgency and money. The model writes one "why" sentence per line. If caps or errors hit, the template version ships. |
+| Risk Flag explanations, Brief lines | **AI, with template fallback** | Code orders the Brief by urgency and money and renders the template first (R8). The model then writes one "why" sentence per line. Lines are cached in the DB per epoch and refreshed only by an explicit "Refresh brief" action (R7). If caps or errors hit, the template version stays. Risk Flags are Attention Items, not Proposals (R9). |
+| Standing Policy invoice reminders | **Code, template only** | No model call and no Untrusted Text (R6). See §3. |
 | Chat Q&A over the account | **AI** (Sonnet 5.5) | Read tools plus propose tools only (ADR 0002). |
 | Injection detection | **Not AI-gated** | A heuristic `injection_suspected` flag is informational only. An LLM classifier is never a security boundary. |
 
@@ -37,16 +43,23 @@ Verified 2026-10-03 against `ai@7.0.127`, `@ai-sdk/anthropic@4.0.71`, and Anthro
 ## 2. Agent architecture
 
 ### 2.1 Two execution shapes
-1. **Pipelines (dispute desk, invoice chaser, Risk Flags, Brief).** Code fetches the data, builds a *Context Bundle*, then makes **one** structured-output call (`generateText`/`streamText` with `output: Output.object({ schema })`, no tools). Code then validates and saves the Proposal. Fewer steps means lower cost, less nondeterminism and less injection surface.
+1. **Pipelines (R7).** Code fetches the data and builds a *Context Bundle*. It then makes **one** structured-output call (`generateText`/`streamText` with `output: Output.object({ schema })`, no tools), validates the result and saves the Proposal. Fewer steps means lower cost, less nondeterminism and less injection surface. The pipelines and their explicit triggers:
+   - dispute desk: `POST /api/disputes/:id/assess`
+   - invoice chaser: `POST /api/invoices/chase`
+   - Risk Flag explanations: `POST /api/risk/explain`
+   - Brief lines: the "Refresh brief" action, cached per epoch
+
+   **Every** model call, in pipelines, chat and evals alike, goes through `lib/guard` `reserveSpend` (worst-case reservation) before the call and `settleSpend` after it.
 2. **Chat copilot.** `streamText` on Sonnet 5.5 with read tools and propose tools, and `stopWhen: isStepCount(8)`. This is the only free tool loop.
 
 | Step | Model | Tools / output | Budget |
 |---|---|---|---|
-| Dispute: classify effective reason | Haiku 4.5 (`temperature: 0`) or Sonnet 5.5 | `Output.object(ClassifySchema)` | maxOutputTokens 512, timeout 15 s |
+| Dispute (`/api/disputes/:id/assess`): classify effective reason | Haiku 4.5 (`temperature: 0`) or Sonnet 5.5 | `Output.object(ClassifySchema)` | maxOutputTokens 512, timeout 15 s |
 | Dispute: assess, select evidence, draft | Opus 5.5, effort `medium` (tune by eval sweep) | `Output.object(DisputeAssessmentSchema)` | maxOutputTokens 8,000 (thinking counts), totalMs 90 s |
-| Reminder draft (one call per Invoice; never batch Customers into one prompt) | Sonnet 5.5, effort `low` | `Output.object(ReminderSchema)` | 2,000 tokens, 30 s, concurrency 4 |
-| Risk Flag explanation, Brief line | Sonnet 5.5, effort `low` | `Output.object` | 1,000 tokens, 20 s |
-| Chat | Sonnet 5.5, effort `medium` | read tools: `list/get_invoices`, `list/get_disputes`, `get_order`, `get_shipment_tracking`, `search_transactions`; propose tools: `propose_invoice_reminder`, `propose_dispute_contest`, `propose_dispute_accept`, `propose_refund` (not registered in v0.1) | `isStepCount(8)`; timeout `{ totalMs: 60000, stepMs: 30000, toolMs: 10000 }`; ≤ 3 propose calls per turn (the 4th returns a tool error) |
+| Reminder draft (`/api/invoices/chase`; one call per Invoice, never batching Customers into one prompt) | Sonnet 5.5, effort `low` | `Output.object(ReminderSchema)` | 2,000 tokens, 30 s, concurrency 4 |
+| Risk Flag explanation (`/api/risk/explain`), Brief line (Refresh brief) | Sonnet 5.5, effort `low` | `Output.object` | 1,000 tokens, 20 s |
+| Standing Policy reminder (`/api/policies/run` or lazy on queue/Brief load) | **None**: deterministic template | Rendered from Invoice fields only | n/a, no `ai_runs` row |
+| Chat | Sonnet 5.5, effort `medium` | read tools (spike-verified allow-list, exact names): `list_invoices`, `get_invoice`, `search_invoicing`, `get_order`, `list_disputes`, `get_dispute`, `list_transactions`, `get_refund`, `get_shipment_tracking`; propose tools: `propose_invoice_reminder`, `propose_dispute_contest`, `propose_dispute_accept`, `propose_refund` (not registered in v0.1) | `isStepCount(8)`; timeout `{ totalMs: 60000, stepMs: 30000, toolMs: 10000 }`; ≤ 3 propose calls per turn (the 4th returns a tool error) |
 
 Tool calls use `tool_choice: auto` with `strict: true` on every tool, because Sonnet 5.5 rejects forced tool choice. The prompt says when to call each tool. Zod 4 `z.strictObject` produces `additionalProperties: false`. Limits that strict mode can't express (lengths, array max) are enforced by a zod parse after the call. A parse failure gets **one** repair attempt with the validation errors. After that, the item fails closed (§7).
 
@@ -74,7 +87,7 @@ Block A is static and byte-stable. It is cached (§6) and versioned, and `prompt
 
 Block B is dynamic and not cached: today's date (from code), currency, and the active slice's tool list summary.
 
-### 2.3 Proposal output contract (field spec; the zod schemas live in `src/features/proposals/`)
+### 2.3 Proposal output contract (field spec; the zod schemas live in `src/features/approvals/schema.ts`)
 **Model-authored fields:**
 - `kind`
 - `target_ref`
@@ -88,12 +101,12 @@ Block B is dynamic and not cached: today's date (from code), currency, and the a
 | `invoice_reminder` | `subject` ≤ 80, `note` ≤ 1,200 with placeholders, `tone` (`friendly`, `firm` or `final`) | invoice ID, recipient, amount, currency, due date |
 | `dispute_contest` | `effective_reason`, `response_text` ≤ 2,000 with placeholders, `evidence_packet[]` of `{ ref, evidence_type, relevance }` (`evidence_type` mirrors PayPal's evidence enum; verify the list in the Disputes API at build time), `cost_tradeoff` ≤ 300 | dispute ID, amount, fee, Response Deadline |
 | `dispute_accept` | `effective_reason`, `note_to_customer` ≤ 600, `cost_tradeoff` | dispute ID, refund amount (= disputed amount) |
-| `refund` | `basis` (`full`, `items` or `shipping_only`), `line_item_refs[]`, `note_to_customer` ≤ 400 | capture ID, payer, amount, currency |
+| `refund` | `basis` (`full`, `items` or `shipping_only`), `line_item_refs[]` (required when `basis = items`), `note_to_customer` ≤ 400 | capture ID, payer, currency, and the amount computed from the basis and line items. The Merchant may edit it at Approval only (`edited_fields`, capped at the refundable remainder). |
 
-Code-owned fields: `risk_level`, `amount_at_stake`, `PayPal-Request-Id`, `run_id` and `prompt_version`.
+Code-owned fields: `subject_ref` (R4), `risk_level`, `amount_at_stake`, `PayPal-Request-Id`, `run_id` and `prompt_version`.
 
 ### 2.4 Citation format
-- **Ref grammar:** `<kind>:<paypal_id>[/<index>][#<field>]`, with `kind` ∈ `dispute | message | order | tracking | txn | invoice | customer`. Examples: `order:5O190127TN364715T`, `tracking:9400111899223817456789`, `txn:8MC585209K746392H#refund`, `message:PP-D-40112/1`.
+- **Ref grammar:** `<kind>:<paypal_id>[/<index>][#<field>]`, with `kind` ∈ `dispute | message | order | tracking | txn | invoice | customer`. Examples: `order:5O190127TN364715T`, `tracking:9400111899223817456789`, `txn:8MC585209K746392H#refund`, `message:PP-D-40112/1`. Simulated Disputes keep their `SIM-` IDs, e.g. `dispute:SIM-0003`.
 - **Inline:** rationale and drafts carry `[order:5O19…]` markers, which the UI renders as chips linking to the source record. The markers are stripped from text sent to PayPal.
 - **Resolution (SC-6):** every ref must resolve against the **Run Ledger**, the set of objects fetched in this run (pipeline bundle or chat tool results). Every inline marker must also appear in `evidence_refs`. If either check fails, the Proposal is rejected before save.
 
@@ -103,6 +116,7 @@ Code-owned fields: `risk_level`, `amount_at_stake`, `PayPal-Request-Id`, `run_id
   - A propose result renders as a Proposal card only after the server validator returns `saved`.
 - **Pipelines:** stream `data-step` parts (`fetching → classifying → drafting → validating → saved | failed`) as soon as the request starts, then stream the partial draft text.
   - A deterministic status appears immediately, which keeps the perceived first token under 3 s (NFR-P3).
+  - The Brief renders its template from DB-cached data first (R8). Model-written lines stream in after that.
   - An unvalidated Proposal is never shown as saved.
 
 ## 3. Untrusted Text handling
@@ -149,7 +163,13 @@ Inside JSON tool results, free-text fields are replaced by the same fenced strin
 
 The worst a successful injection can do is produce a bad recommendation or draft that the Merchant reviews. The UI therefore shows the `injection_suspected` badge next to such Proposals.
 
-**Standing Policy exception (D-3).** Reminders run under a Standing Policy go out without per-item review. Their drafts are therefore generated **without** Untrusted Text in context (invoice notes withheld). If any output check fails, they fall back to the reminder template. This needs `security-auditor` sign-off.
+**Standing Policy reminders (D-3, R6; NG4 amended).** These go out without per-item review, so they use a **deterministic template and make no model call**. No Untrusted Text is read into them.
+- The template is filled only from code-owned Invoice fields: invoice number, amount, currency, due date and the PayPal pay link.
+- The body uses a generic greeting. Customer names are Untrusted Text, so they never enter the body; PayPal addresses the reminder to the Invoice recipient.
+- Injection therefore has no path into an unreviewed send.
+- If the open-work index is hit, the Invoice is skipped and the skip is counted.
+
+This needs `security-auditor` sign-off at 0.5c.
 
 ## 4. Eval plan
 
@@ -271,7 +291,7 @@ Each injected fixture has a **clean twin** with the same data and no payload.
 - judge ≈ $0.5
 - **full ≈ $7–8**
 
-This is **above the A-9 placeholder of $5 per full run**. Recommendation: set it to $10, or drop the deep run.
+This is within the A-9 budget of **≤ $10 per full run** (R14). The runner's default `--budget-usd` is 10. The deep run (§4.2) is manual and outside this budget; it is estimated at ≈ $11, so run it at most once, before submission.
 
 ### 4.4 CI policy
 - **Every PR, no key needed:** unit tests for normalizer, fencing, ref grammar, validators, placeholder renderer and output checks, plus schema round-trips. These are required checks.
@@ -280,7 +300,12 @@ This is **above the A-9 placeholder of $5 per full run**. Recommendation: set it
   - 8 injection payloads × 1 run, rotating surfaces
   - Smoke injection must be 100% contained (gating)
   - Golden smoke ≥ 7/8 (gating, a noise-tolerant proxy)
-- **Nightly:** `--suite full`, only if AI paths (`src/features/ai/**`, prompts, schemas, `evals/**`) changed since the last nightly.
+- **Nightly** (scheduled, plus `workflow_dispatch`): `--suite full`, only if one of these paths changed since the last nightly:
+  - `src/lib/ai/**`
+  - `src/features/*/ai/**`
+  - `src/lib/untrusted/**`
+  - `src/features/approvals/schema.ts`
+  - `evals/**`
 - **Manual (`workflow_dispatch`):** `full` or `deep`.
 - A full pass is **required before tagging v0.3+ and before submission**. The results summary is committed for ACCEPTANCE.md and FR-5.6.
 
@@ -308,11 +333,21 @@ Code pre-checks run before the judge:
   - newest 10 messages
   - Untrusted Text truncation per §3
 - **Per-session cap:** 100k tokens (A-9). Chat is limited to 20 requests per IP per 10 minutes.
-- **Daily spend ceiling:** $10 (A-9), checked **before** each call (projected cost) and after it (actual). When reached, the system fails closed: chat says it's paused until tomorrow, and pipelines show deterministic data and template drafts. Eval runs have their own `--budget-usd` and never consume the demo ceiling.
-- **Model routing** (price per MTok, input/output, verified 2026-10-03):
-  - **Sonnet 5.5** ($2/$10): default for chat, reminders, explanations and the Brief.
-  - **Opus 5.5** ($4/$20): only for dispute assessment and response drafting (NFR-C2).
-  - **Haiku 4.5** ($1/$5): classification only, and only if it clears §4.3.
+- **Daily spend ceiling:** $10 (A-9), enforced by `lib/guard`: `reserveSpend` reserves the worst-case cost before each call, and `settleSpend` records the actual cost after it. When reached, the system fails closed: chat says it's paused until tomorrow, and pipelines show deterministic data and template drafts. Eval calls also go through `reserveSpend` (purpose `eval`). They reserve against the run's `--budget-usd`, not the demo ceiling.
+- **Prices** were verified on Anthropic's own pricing page (`docs.claude.com/en/docs/about-claude/pricing`) on **2026-10-03**. They are held as config constants (`MODEL_PRICES` with `PRICES_VERIFIED_AT = '2026-10-03'` in `src/lib/ai/models.ts`), and `cost_usd` is computed from them. Per MTok:
+
+  | Model | Input | Output | 5-min cache write | Cache hit |
+  |---|---|---|---|---|
+  | Opus 5.5 | $4 | $20 | $5 | $0.20 |
+  | Sonnet 5.5 | $2 | $10 | $2.50 | $0.20 |
+  | Haiku 4.5 | $1 | $5 | $1.25 | $0.10 |
+
+  No other price is assumed. If the page changes, update the constants and the date.
+- **Model routing:**
+  - **Sonnet 5.5**: default for chat, agent reminder drafts, explanations and Brief lines.
+  - **No model** for Standing Policy reminders (R6).
+  - **Opus 5.5**: only for dispute assessment and response drafting (NFR-C2).
+  - **Haiku 4.5**: classification only, and only if it clears §4.3.
   - **Fallbacks:** if Opus errors or times out, use Sonnet 5.5, and mark the Proposal `model_fallback`. Never fall back to Haiku for drafting.
   - `effort` is always set explicitly. It is tuned by an eval sweep, not by intuition.
 - **Prompt caching:**
@@ -364,7 +399,10 @@ These are definitions only. No outcome numbers are claimed until measured. Every
 
 ## 9. Handoffs
 - **`builder`:** implement §2.3 schemas, the §3 normalizer and fence, the Run Ledger validator, the placeholder renderer, output checks, `ai_runs` and `evals/run.ts`, test first.
-- **`security-auditor`:** review §3, the Standing Policy exception, the markdown renderer (no remote images or auto-links from model output), and the output-check allowlist.
+- **`security-auditor`:** review §3, the template-only Standing Policy reminders (sign-off at 0.5c), the markdown renderer (no remote images or auto-links from model output), and the output-check allowlist.
 - **`data-engineer`:** fixture realism and the 44-case golden set.
 - **`architect`:** pipeline vs. chat split.
-- **User decisions (owned by the user):** the full-eval budget (A-9 vs. §4.3 estimate), and updating R5's "temperature 0" wording.
+- **Resolved in round 2:**
+  - The full-eval budget is ≤ $10 (A-9).
+  - R5 no longer relies on temperature.
+  - Standing Policy reminders are template-only (R6).
