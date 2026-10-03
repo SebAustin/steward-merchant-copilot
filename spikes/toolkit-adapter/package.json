@@ -1,0 +1,22 @@
+{
+  "name": "spike-toolkit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.71",
+    "@paypal/agent-toolkit": "^1.11.0",
+    "@paypal/paypal-server-sdk": "^2.5.0",
+    "@types/node": "^26.6.4",
+    "ai": "^7.0.127",
+    "typescript": "^5.9.3",
+    "zod": "^4.6.5"
+  }
+}
