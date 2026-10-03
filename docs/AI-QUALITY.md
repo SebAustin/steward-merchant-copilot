@@ -4,14 +4,11 @@ Owner: AI PM. Audience: `builder` (implements against this), `security-auditor`,
 Inputs: `REQUIREMENTS.md` (SC-3..SC-7, SC-16, NFR-S4, NFR-C1..C3), `ASSUMPTIONS.md` §3, `CONTEXT.md` (terms used as defined), ADR 0001/0002, and `docs/PLAN-DECISIONS-R1.md`. Rulings R1–R15 there are binding.
 Owns (R1): models, routing, prompts, the Untrusted Text format, the evidence-ref grammar, eval commands, budgets, and CI eval policy. Routes, pages and copy belong to DESIGN.md; architecture, data model and slices belong to PLAN.md.
 API facts verified 2026-10-03 against `ai@7.0.127` and `@ai-sdk/anthropic@4.0.71`. Prices were verified the same day (§6). Re-verify both before you change routing.
-Code locations (R14):
-- AI code lives in `src/lib/ai/**` (models, agent, propose, ledger, prompts) and `src/features/*/ai/**` (per-feature pipelines).
-- Untrusted Text handling lives in `src/lib/untrusted/**`.
-- Proposal zod schemas live in `src/features/approvals/schema.ts`.
+Code locations: see **PLAN §6** (the canonical layout; R25). This doc names modules only by their PLAN §6 names, e.g. `lib/ai/models` and `features/approvals/schema.ts`.
 
 > **Version facts the build must respect.**
 > - AI SDK 7 renamed some APIs. `system` is now `instructions`, and `maxSteps`/`stepCountIs` are now `stopWhen: isStepCount(n)`. `onFinish` is now `onEnd`. `usage` now sums all steps, and cache tokens are reported in `usage.inputTokenDetails.cacheReadTokens` and `cacheWriteTokens`.
-> - `claude-sonnet-5-5` and `claude-opus-5-5` return a 400 error for any non-default `temperature`/`top_p`/`top_k`, for assistant prefill, and for forced `tool_choice`. No Sonnet or Opus call sets `temperature`; that includes chat (`src/lib/ai/agent`). Only `claude-haiku-4-5-20251001` takes `temperature: 0`. Elsewhere, determinism comes from structured outputs, strict tools, code validators and repeated eval runs (REQUIREMENTS R5 no longer relies on temperature).
+> - `claude-sonnet-5-5` and `claude-opus-5-5` return a 400 error for any non-default `temperature`/`top_p`/`top_k`, for assistant prefill, and for forced `tool_choice`. No Sonnet or Opus call sets `temperature`; and that includes chat (`lib/ai/chat`). Only `claude-haiku-4-5-20251001` takes `temperature: 0`. Elsewhere, determinism comes from structured outputs, strict tools, code validators and repeated eval runs (REQUIREMENTS R5 no longer relies on temperature).
 
 ## 1. AI-fit judgment
 
@@ -87,7 +84,7 @@ Block A is static and byte-stable. It is cached (§6) and versioned, and `prompt
 
 Block B is dynamic and not cached: today's date (from code), currency, and the active slice's tool list summary.
 
-### 2.3 Proposal output contract (field spec; the zod schemas live in `src/features/approvals/schema.ts`)
+### 2.3 Proposal output contract (field spec; the zod schemas live in `features/approvals/schema.ts` and the propose tools in `features/approvals/propose.ts`, per PLAN §6)
 **Model-authored fields:**
 - `kind`
 - `target_ref`
@@ -103,7 +100,13 @@ Block B is dynamic and not cached: today's date (from code), currency, and the a
 | `dispute_accept` | `effective_reason`, `note_to_customer` ≤ 600, `cost_tradeoff` | dispute ID, refund amount (= disputed amount) |
 | `refund` | `basis` (`full`, `items` or `shipping_only`), `line_item_refs[]` (required when `basis = items`), `note_to_customer` ≤ 400 | capture ID, payer, currency, and the amount computed from the basis and line items. The Merchant may edit it at Approval only (`edited_fields`, capped at the refundable remainder). |
 
-Code-owned fields: `subject_ref` (R4), `risk_level`, `amount_at_stake`, `PayPal-Request-Id`, `run_id` and `prompt_version`.
+Code-owned fields: `subject_ref`, `risk_level`, `amount_at_stake`, `PayPal-Request-Id`, `run_id` and `prompt_version`.
+
+Per R16, `subject_ref` is:
+- the **capture ID** for `dispute_contest`, `dispute_accept` and `refund` (a SIM Dispute uses its linked seeded Order's capture)
+- the **Invoice ID** for `invoice_reminder`
+
+The derivation table is in PLAN §5. The model never supplies `subject_ref`.
 
 ### 2.4 Citation format
 - **Ref grammar:** `<kind>:<paypal_id>[/<index>][#<field>]`, with `kind` ∈ `dispute | message | order | tracking | txn | invoice | customer`. Examples: `order:5O190127TN364715T`, `tracking:9400111899223817456789`, `txn:8MC585209K746392H#refund`, `message:PP-D-40112/1`. Simulated Disputes keep their `SIM-` IDs, e.g. `dispute:SIM-0003`.
@@ -291,7 +294,20 @@ Each injected fixture has a **clean twin** with the same data and no payload.
 - judge ≈ $0.5
 - **full ≈ $7–8**
 
-This is within the A-9 budget of **≤ $10 per full run** (R14). The runner's default `--budget-usd` is 10. The deep run (§4.2) is manual and outside this budget; it is estimated at ≈ $11, so run it at most once, before submission.
+That is within **≤ $10 per full run** (A-9), and the runner's default `--budget-usd` is 10.
+
+**Cumulative eval-spend guard (R20).** Before starting, `evals/run.ts` sums `ai_runs.cost_usd` where `purpose='eval'`. It refuses to start if that sum plus `--budget-usd` would exceed **$90**. The project total stays ≤ $150 (A-9).
+
+Planned eval spend (estimates; the guard enforces the cap):
+
+| Run | Count | Cost each | Total |
+|---|---|---|---|
+| Full, at tag gates v0.3, v0.4, v0.5, plus 1 manual pre-submission run | 4 | ≈ $8 | ≈ $32 |
+| Nightly `golden`, only on nights AI paths changed (roughly Oct 21–Nov 8) | ≤ 12 | ≈ $3 | ≤ $36 |
+| PR smoke | ~30 | ≈ $0.5 measured (cap $1) | ≈ $15 |
+| **Planned total** | | | **≈ $83** |
+
+The deep run (§4.2, ≈ $11) is optional. It runs only if the guard shows enough headroom; otherwise it is skipped.
 
 ### 4.4 CI policy
 - **Every PR, no key needed:** unit tests for normalizer, fencing, ref grammar, validators, placeholder renderer and output checks, plus schema round-trips. These are required checks.
@@ -300,14 +316,16 @@ This is within the A-9 budget of **≤ $10 per full run** (R14). The runner's de
   - 8 injection payloads × 1 run, rotating surfaces
   - Smoke injection must be 100% contained (gating)
   - Golden smoke ≥ 7/8 (gating, a noise-tolerant proxy)
-- **Nightly** (scheduled, plus `workflow_dispatch`): `--suite full`, only if one of these paths changed since the last nightly:
+- **Nightly** (`eval-nightly.yml`, scheduled plus `workflow_dispatch`): `--suite golden` **only** (≈ $3). It runs only if one of these paths (from PLAN §6) changed since the last nightly:
   - `src/lib/ai/**`
-  - `src/features/*/ai/**`
   - `src/lib/untrusted/**`
+  - `src/features/*/ai/**`
   - `src/features/approvals/schema.ts`
+  - `src/features/approvals/propose.ts`
   - `evals/**`
-- **Manual (`workflow_dispatch`):** `full` or `deep`.
-- A full pass is **required before tagging v0.3+ and before submission**. The results summary is committed for ACCEPTANCE.md and FR-5.6.
+- **Full suite** (`--suite full`): runs **only** at the tag gates v0.3, v0.4 and v0.5, plus one manual pre-submission run (R20). A full pass is required to tag.
+- **Deep run:** manual only, and only within the cumulative guard.
+- Every live-model job checks the cumulative eval guard first. The results summary is committed for ACCEPTANCE.md and FR-5.6.
 
 ## 5. Draft quality rubric (dispute responses, reminders, Customer notes)
 The judge returns `{ scores, failures[], pass }` via `Output.object`. Each criterion is scored 1–4. **Pass** = every criterion ≥ 3, plus the hard fails below.
@@ -334,7 +352,7 @@ Code pre-checks run before the judge:
   - Untrusted Text truncation per §3
 - **Per-session cap:** 100k tokens (A-9). Chat is limited to 20 requests per IP per 10 minutes.
 - **Daily spend ceiling:** $10 (A-9), enforced by `lib/guard`: `reserveSpend` reserves the worst-case cost before each call, and `settleSpend` records the actual cost after it. When reached, the system fails closed: chat says it's paused until tomorrow, and pipelines show deterministic data and template drafts. Eval calls also go through `reserveSpend` (purpose `eval`). They reserve against the run's `--budget-usd`, not the demo ceiling.
-- **Prices** were verified on Anthropic's own pricing page (`docs.claude.com/en/docs/about-claude/pricing`) on **2026-10-03**. They are held as config constants (`MODEL_PRICES` with `PRICES_VERIFIED_AT = '2026-10-03'` in `src/lib/ai/models.ts`), and `cost_usd` is computed from them. Per MTok:
+- **Prices** were verified on Anthropic's own pricing page (`docs.claude.com/en/docs/about-claude/pricing`) on **2026-10-03**. They are held as config constants (`MODEL_PRICES` with `PRICES_VERIFIED_AT = '2026-10-03'` in `lib/ai/models`, PLAN §6), and `cost_usd` is computed from them. Per MTok:
 
   | Model | Input | Output | 5-min cache write | Cache hit |
   |---|---|---|---|---|
@@ -402,7 +420,4 @@ These are definitions only. No outcome numbers are claimed until measured. Every
 - **`security-auditor`:** review §3, the template-only Standing Policy reminders (sign-off at 0.5c), the markdown renderer (no remote images or auto-links from model output), and the output-check allowlist.
 - **`data-engineer`:** fixture realism and the 44-case golden set.
 - **`architect`:** pipeline vs. chat split.
-- **Resolved in round 2:**
-  - The full-eval budget is ≤ $10 (A-9).
-  - R5 no longer relies on temperature.
-  - Standing Policy reminders are template-only (R6).
+- **Resolved:** full eval ≤ $10 per run and ≤ $90 cumulative (A-9, R20); no temperature in R5; template-only policy reminders (R6).

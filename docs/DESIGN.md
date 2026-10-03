@@ -130,8 +130,11 @@ Grid features, where they appear, and the slice they land in (R10; SC-17 invento
 | Master/detail: Evidence Packet in the detail row | Disputes, Queue | 0.3 | Enterprise |
 | Sparkline column: customer payment history (12 months) | Queue, Invoices, Risk | 0.4 | Enterprise |
 | **One** integrated chart: "Cash at risk by Attention Item type" | `/risk` only | 0.4 | Enterprise |
-| Quick filter (`/`), column and set filters; pinned action column; row selection | all grids | 0.2+ | Community |
+| Set filter (kind, risk, status) | Queue, Risk | 0.2 | Enterprise |
+| Quick filter (`/`), text and number column filters; pinned action column; row selection | all grids | 0.2+ | Community |
 | Full keyboard navigation and custom hotkeys | all grids | 0.2+ | Community |
+
+Honest count: **Enterprise-only** are grouping, status bar, master/detail, sparkline column, integrated chart and set filter (6). **Community-only** are custom renderers, quick and column filters, pinned columns with row selection, and keyboard navigation (4 distinct features). The inline-SVG sparkline in the fallback is a custom renderer, so it is not counted as a fifth. SC-17's ">= 5 advanced features" therefore needs the Enterprise key; in the fallback, kind and risk filtering use filter chips above the grid instead of the set filter.
 
 0.5d is polish only. **AG Grid key decision date: Oct 20.** If no Enterprise key has arrived, the Community fallback becomes the design (not an apology), and the demo is recorded with it:
 - Grouping: a "Group by kind" sectioned view using full-width section rows (kind, count, sum) and a footer strip for the selection total.
@@ -186,9 +189,10 @@ State legend: **L** loading, **E** empty, **X** error, **OK** success.
 4. Confirm -> in-dialog **L**: "Sending to PayPal..." (button disabled, `aria-busy`, Cancel removed; not dismissible mid-write).
 5. **OK:** stamp "Sent", PayPal reference, "Audit Entry recorded", **Back to queue** and **View Audit Entry**. Focus moves to the success heading; the row becomes "Sent" and moves to a collapsed "Decided today" group.
 6. **X: three distinct outcomes**, each writes an Audit Entry:
-   - **Can retry** (`failed_retryable`: PayPal was busy, rate-limited, or timed out before answering). "PayPal couldn't take this just now. Nothing was changed." Buttons **Try again** (safe: Steward reuses the same request key, so it can't go through twice) and **Close**. Row status "Failed - can retry".
-   - **Final** (`failed_final`: PayPal refused it on the merits). "PayPal declined this, so it did not happen." followed by PayPal's reason in plain words. **No retry button.** Buttons **Close** and **View Audit Entry**. Row status "Not done", actions removed. Steward may draft a new Proposal if the facts change.
-   - **Unknown outcome** (no usable answer). "Steward is checking PayPal..." (`aria-busy`, nothing to click). Steward reads the record back from PayPal and resolves it: done -> OK with the line "PayPal had already recorded it. Steward confirmed by looking; nothing was sent twice." Not done -> **Can retry** with "PayPal has no record of this, so it did not happen. Trying again is safe."
+   - **Can retry** (`failed_retryable`: known *not* processed, e.g. connection refused or a PayPal error proving nothing ran). "PayPal couldn't take this just now. Nothing was changed." Buttons **Try again** (same request key; if the last outcome was ever unconfirmed, Steward reads PayPal back first), **Drop this Proposal**, **Close**. **Try again appears only in this state.** Row status "Failed - can retry".
+   - **Drop this Proposal** (also in the row menu): opens the Reject dialog (flow d) titled "Drop this Proposal?", reason chips include "Switching to Accept" / "Switching to Contest". It becomes Rejected with that reason, which frees the subject so Steward can draft the other response.
+   - **Final** (`failed_final`: PayPal returned a *definitive* decline, and only then). "PayPal declined this, so it did not happen." plus PayPal's reason in plain words. **No retry.** Buttons **Close**, **View Audit Entry**. Row status "Not done", actions removed.
+   - **Unconfirmed** (`outcome_unknown`: the request was sent but no definitive answer came back). Steward first shows "Steward is checking PayPal..." (`aria-busy`). If the read-back settles it: done -> OK "PayPal had already recorded it. Nothing was sent twice."; not done -> Can retry. If it can't: stamp **Unconfirmed** (dashed outline, question glyph, a different shape from Sent and Rejected), copy "Steward can't confirm whether PayPal did this yet. This [Dispute / refund] stays locked until it's confirmed." Actions: **Check again** (read-back), **I checked PayPal: it happened**, **It didn't happen**. The last two each open a confirm step ("Record that this happened? Steward will mark it Sent and never send it again." / "Record that it didn't happen? This unlocks it so you can try again or drop it.") and are saved as an Audit Entry in the Merchant's name. No Try again or Drop while locked.
 7. Simulated dispute: the dialog carries "This Dispute is simulated. Nothing is sent to PayPal." and the stamp reads "Simulated".
 
 **(d) Reject with a reason**
@@ -324,11 +328,11 @@ Steward's text is serif; the user's is mono. Tool activity lines are collapsed b
 
 **Proposal row anatomy (Queue, Disputes, Invoices share it; the Brief uses a lighter one-line Attention Item)**
 `[select] [margin rule] [AI status] [kind + subject (Fraunces 500, name; mono ID beneath)] [risk pill] [money] [deadline] [history sparkline] [recommends] [actions]`
-- States: default; hover (`signal-wash` 50%); focus-visible (`focusShadow`); selected (`signal-wash` + checkbox); new (wash + "New" chip 8 s, fades via opacity); decided (muted, no margin rule, stamp); executing (actions replaced by "Sending..."); checking ("Checking PayPal..."); failed-can-retry (Approve becomes **Try again**); failed-final ("Not done", no actions); expired (muted stamp, no actions, tooltip "This round was reset. Nothing was sent."); drafting (actions `aria-disabled`, reason as tooltip).
+- States: default; hover (`signal-wash` 50%); focus-visible (`focusShadow`); selected (`signal-wash` + checkbox); new (wash + "New" chip 8 s, fades via opacity); decided (muted, no margin rule, stamp); executing (actions replaced by "Sending..."); checking ("Checking PayPal..."); unconfirmed (Ember margin rule stays, subject locked, actions Check again / I checked PayPal); failed-can-retry (Approve becomes **Try again**, plus **Drop**); failed-final ("Not done", no actions); expired (muted stamp, no actions, tooltip "This round was reset. Nothing was sent."); drafting (actions `aria-disabled`, reason as tooltip).
 - Actions: **Approve** (Ember fill, signal-ink text, 32px desktop / 44px coarse, check glyph) and **Reject** (ghost, line-strong border). Hover: Approve goes `signal-strong`; active: translateY(1px); focus: `--focus-ring`; disabled: 45% opacity plus reason. Specific names: `aria-label="Approve: refund $48.00 to Dana R."`.
 - Content: subject is a person or business name, never a raw ID alone; one line, ellipsis with `title`.
 
-**AI status renderer** (word + glyph, steward-blue unless noted): `Drafting` (3-dot opacity pulse), `Ready`, `Needs your edit`, `Executing`, `Checking PayPal`, `Sent` (ink stamp), `Rejected` and `Expired` (muted stamps), `Failed - can retry` and `Not done` (risk-high). 12px mono caps.
+**AI status renderer** (word + glyph, steward-blue unless noted): `Drafting` (3-dot opacity pulse), `Ready`, `Needs your edit`, `Executing`, `Checking PayPal`, `Unconfirmed` (steward-blue dashed-outline stamp, locked glyph), `Sent` (ink stamp), `Rejected` and `Expired` (muted stamps), `Failed - can retry` and `Not done` (risk-high). 12px mono caps.
 
 **Risk pill** (`--radius-pill`, mono 12px caps, 24px tall, 1px border in its own hue, `-bg` fill)
 | Level | Glyph | Label | Colors |
@@ -381,7 +385,7 @@ Three consequence tiers, same layout: *Moves money* (refund, accept Dispute): ".
 
 **Standing Policies page** (`/policies`, invoice reminders only, off by default). Each policy reads as one sentence with inline fields: "Send the standard reminder for Overdue Invoices more than [7] days late and under [$500.00], at most [5] a day." Toggle label "Off / On". The page states: **"Policy reminders use a fixed template. No AI writes them."** and shows the template text read-only beside the fields. Each policy shows its last run and **skip counts**: "Last run 7:30 pm: sent 3, skipped 2 (already has open work)." Skips are listed with the reason; every run and every send is an Audit Entry ("Approved by Standing Policy"). Refunds and Dispute responses are never covered; the page says so.
 
-**Settings / Demo** (`/settings`). Read-only "Dispute source: Simulated (set by the DISPUTE_SOURCE environment setting; it can't be changed here)", showing Live / Simulated / Mixed. Telemetry (tokens, cost per session), **Reset demo**, sign out. Reset dialog: "Start a fresh demo round?" / "Starts a fresh demo round. History stays in the Audit Log." / "Open Proposals from the previous round show as Expired." Buttons **Cancel** and **Start fresh round**. Afterward the queue shows the old Proposals in a collapsed "Earlier round (Expired)" group.
+**Settings / Demo** (`/settings`). Read-only "Dispute source: Simulated (set by the DISPUTE_SOURCE environment setting; it can't be changed here)", showing Live / Simulated / Mixed. Telemetry (tokens, cost per session), **Reset demo**, sign out. Reset dialog: "Start a fresh demo round?" / **"This resets the demo for everyone viewing it."** / "Starts a fresh demo round. History stays in the Audit Log. Open Proposals from the previous round show as Expired." Buttons **Cancel** and **Start fresh round**. Resets are rate-limited, so the Reset button has a cooldown state: disabled, label "Available again in 12 min" (counts down each minute, polite status on change, reason in `aria-describedby`); at the daily limit it reads "Daily reset limit reached. Available again tomorrow." Afterward the queue shows the old Proposals in a collapsed "Earlier round (Expired)" group.
 
 **Toasts and inline results.** Decisions report *in place* (dialog, then row stamp); toasts only for background events and batch results. Region bottom-left (bottom-center on mobile), max 3, `role="status"` for success/info, auto-dismiss 6 s and pause on hover/focus; errors use `role="alert"`, never auto-dismiss, always carry a next step. Slide in via transform+opacity; reduced motion: opacity only. Examples: "3 reminders sent. 3 Audit Entries recorded." / "1 of 3 didn't go through. Maple St Cafe's reminder was not sent. [Review]". Inline errors: ink text with a berry left rule and a leading glyph, `aria-live="polite"`.
 
@@ -397,11 +401,11 @@ Voice: calm, precise. Say "Steward", never "we". Lead with the fact, then the de
 | Confirm (money) | "Steward will refund $48.00 through PayPal. A PayPal refund can't be undone." |
 | Execution success | "Sent. PayPal accepted the response at 7:58 pm. Audit Entry recorded." |
 | Failed, can retry | "PayPal couldn't take this just now. Nothing was changed. You can try again safely." |
-| Failed, final | "PayPal declined this, so it did not happen. Reason from PayPal: the dispute is already closed." |
-| Unknown outcome | "Steward is checking PayPal..." then "PayPal had already recorded it. Nothing was sent twice." / "PayPal has no record of this, so it did not happen." |
+| Failed, final (definitive decline only) | "PayPal declined this, so it did not happen. Reason from PayPal: the dispute is already closed." |
+| Unconfirmed | "Steward can't confirm whether PayPal did this yet. This refund stays locked until it's confirmed." |
 | Reject | "Rejection is final for this Proposal. Steward may draft a new one if something changes." |
 | Edited refund | "Edited by you: $250.00 instead of $432.00." |
-| Reset demo | "Starts a fresh demo round. History stays in the Audit Log." |
+| Reset demo | "This resets the demo for everyone viewing it." / "Available again in 12 min" |
 | Policy note | "Policy reminders use a fixed template. No AI writes them." |
 | Budget reached | "Steward has reached today's demo budget. You can keep reviewing; asking resumes at 00:00 UTC." |
 
