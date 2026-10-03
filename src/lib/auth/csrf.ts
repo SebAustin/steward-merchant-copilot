@@ -18,7 +18,11 @@ export type CsrfCheck = Readonly<{
   host: string | undefined
 }>
 
-function sameHost(origin: string | undefined, host: string | undefined): boolean {
+/** True when the Origin header names the same host (and port) the request was sent to. */
+export function isSameOrigin(
+  origin: string | undefined | null,
+  host: string | undefined | null,
+): boolean {
   if (!origin || !host) return false
   try {
     return new URL(origin).host === host
@@ -29,7 +33,7 @@ function sameHost(origin: string | undefined, host: string | undefined): boolean
 
 /** True only when the token matches this session AND the Origin is this site (state-changing requests). */
 export function verifyCsrf(check: CsrfCheck): boolean {
-  if (!sameHost(check.origin, check.host)) return false
+  if (!isSameOrigin(check.origin, check.host)) return false
   if (!check.token) return false
   const expected = Buffer.from(csrfTokenFor(check.sid, check.secret))
   const given = Buffer.from(check.token)
