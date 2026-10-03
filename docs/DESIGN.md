@@ -15,7 +15,7 @@ Signature moves (what makes it not a template):
 
 References (structure and mood only, nothing copied): **Stripe Press** (warm paper, editorial serif authority), **HEY** (warm, opinionated, personality in a work tool), **Linear** (keyboard-first dense tables).
 
-Fonts (Google Fonts, `font-display: swap`, Latin subset, preload only Fraunces 500 and Plex Mono 500): Fraunces (variable, wght 400-700, opsz 9-144, `SOFT`/`WONK` off) and IBM Plex Mono 400/500/600. Two families. Fallbacks `Georgia, serif` and `ui-monospace, Menlo, monospace`, with `size-adjust` to hold CLS < 0.1.
+Fonts (Google Fonts, `font-display: swap`, Latin subset, preload Fraunces 500 and Plex Mono 500 only): Fraunces (variable, opsz 9-144) and IBM Plex Mono 400/500/600; `size-adjust` fallbacks hold CLS < 0.1.
 
 ## 2. Design tokens
 
@@ -133,8 +133,10 @@ Grid features, where they appear, and the slice they land in (R10; SC-17 invento
 | Set filter (kind, risk, status) | Queue, Risk | 0.2 | Enterprise |
 | Quick filter (`/`), text and number column filters; pinned action column; row selection | all grids | 0.2+ | Community |
 | Full keyboard navigation and custom hotkeys | all grids | 0.2+ | Community |
+| **Inline cell editing** of a Proposal's draft text (see section 6) | Queue | 0.2 | Community |
+| **CSV export** of the filtered rows ("Export CSV") | `/audit` | 0.2 | Community |
 
-Honest count: **Enterprise-only** are grouping, status bar, master/detail, sparkline column, integrated chart and set filter (6). **Community-only** are custom renderers, quick and column filters, pinned columns with row selection, and keyboard navigation (4 distinct features). The inline-SVG sparkline in the fallback is a custom renderer, so it is not counted as a fifth. SC-17's ">= 5 advanced features" therefore needs the Enterprise key; in the fallback, kind and risk filtering use filter chips above the grid instead of the set filter.
+Honest count (R29): **Enterprise-only (6):** grouping, status bar, master/detail, sparkline column, integrated chart, set filter. **Community (6 distinct):** custom renderers, quick and column filters, pinned columns with row selection, keyboard navigation, inline draft editing, CSV export. The inline-SVG sparkline in the fallback is a custom renderer and is not counted again. **SC-17 (">= 5 advanced features") holds in both branches:** with the key, 12 features; without it, 6 Community features. In the fallback, kind and risk filtering use filter chips above the grid instead of the set filter.
 
 0.5d is polish only. **AG Grid key decision date: Oct 20.** If no Enterprise key has arrived, the Community fallback becomes the design (not an apology), and the demo is recorded with it:
 - Grouping: a "Group by kind" sectioned view using full-width section rows (kind, count, sum) and a footer strip for the selection total.
@@ -153,7 +155,7 @@ Masthead (56px, sticky): wordmark "Steward" (Fraunces italic) with "Ember & Oak 
 | Invoices | `/invoices` | Overdue Invoices with aging and history sparkline | Invoices |
 | Disputes | `/disputes` | Dispute list with Response Deadline; Evidence Packet detail | Disputes |
 | Transactions & Risk | `/risk` | Transaction Search grid, Risk Flags with explanations, the one integrated chart | Transactions, Risk Flags |
-| Audit Log | `/audit` | Append-only Audit Entries; filter; export CSV | Audit Entries |
+| Audit Log | `/audit` | Append-only Audit Entries; filter; Export CSV. Weekly hosted-smoke entries show actor "Hosted check" (never the raw `smoke` id; muted, with a "Hide Hosted check" chip). `SIM-SMOKE` never appears in any judge-facing grid or label. | Audit Entries |
 | Standing Policies (v0.5) | `/policies` | Off by default; invoice reminders only; caps; skip counts | Standing Policies |
 | Settings / Demo | `/settings` | Dispute source (read-only), Reset demo, telemetry, sign out | Demo state |
 | Copilot | docked panel on every page | Ask, stream, cite, create Proposals | Chat |
@@ -180,7 +182,7 @@ State legend: **L** loading, **E** empty, **X** error, **OK** success.
 2. Send: the message appears; Steward shows "Looking at invoices, disputes, and transactions..." with plain tool lines ("Checked 14 invoices").
 3. **L:** the answer streams in Fraunces. Citation chips `[1] Invoice INV-0042` appear inline; activating one scrolls to and flashes the grid row (opacity wash).
 4. At completion: "Drafted 3 Proposals. They are waiting in your queue." with **View in queue**. Rows animate in (translateY 8px to 0, opacity) inside their kind group with a "New" tag for 8 s; the tab count updates.
-5. **X:** stream drops: keep partial text, append "Steward lost the connection partway through. [Retry]". Budget reached: "Steward has reached today's demo budget. You can keep reviewing the queue; asking resumes at 00:00 UTC." The composer is disabled with that reason as its description.
+5. **X:** stream drops: keep partial text, append "Steward lost the connection partway through. [Retry]". Budget reached: "Steward has reached today's demo allowance. The demo has a daily allowance that resets at midnight UTC. You can keep reviewing the queue; asking resumes then." The composer is disabled with that reason as its description.
 
 **(c) Review a dispute Proposal, then approve**
 1. Dispute-response row -> Enter or **Open** -> drawer slides in from the right (transform). Focus moves to the drawer heading.
@@ -257,6 +259,7 @@ Left column max 760px, hero in Fraunces display (opsz 144); ruled rows, no boxes
 | v REFUNDS  1                                  $432.00                                              |
 |[ ] Ready     Pat T. #1177  Full   (o)MED  $432.00   -   |:.|||  Refund  [Approve][Reject] >       |
 |              Cites Risk Flag: repeat refunds (view on Risk)                                        |
+| > Unconfirmed  1  (stays after a reset; Ember rule; Check again)                                   |
 | > Earlier round (Expired)  4  - collapsed                                                          |
 |--------------------------------------------------------------------------------------------------|
 | status bar: Selected 0 / $0.00  |  Decided today 3  |  Rows 6                                      |
@@ -309,13 +312,10 @@ Still an AG Grid instance: one full-width row renderer (the Proposal row anatomy
 ```
 +------------------------------------+
 | Steward (copilot)       [-] [clear]|
-| You  7:41 pm                       |
-| What needs my attention?           |
-| Steward                            |
-| Three things can't wait past       |
-| Friday. A Dispute from Dana R.     |
-| [1] closes in 1d 04h... (streaming)|
-|  > Checked 14 invoices, 2 disputes |
+| You: What needs my attention?      |
+| Steward: Three things can't wait   |
+| past Friday. [1] closes in 1d 04h  |
+|  > Checked 14 invoices (streaming) |
 |  Drafted 3 Proposals  [View in queue]
 | (what needs me?) (draft reminders) |
 | [ Ask Steward...               ][>]|
@@ -359,6 +359,13 @@ Glyph fill plus word survives grayscale and forced colors. `title`: the reason i
 ```
 Steward picks the basis (Full / Items / Shipping only) and the line items; **code computes the amount**, and the drawer says so ("Amount computed from the Order, not written by AI"). **Edit amount** reveals a field at Approval time; it can only go *down*, capped at the refundable remainder. Over-cap error: "That's more than the $432.00 still refundable." Once changed, the amount shows `$250.00` with a struck-through `$432.00` and an **"Edited by you"** chip; the row, the confirm dialog (button reads "Refund $250.00 to Pat T.") and the Audit Entry carry the same mark.
 
+**Draft text editing in the grid (Community cell editing).** The queue's "Draft" column previews the reminder or dispute-response text. *Only* that column is editable, and only while the row is Ready or Needs your edit. Subject, recipient, kind and amounts are never editable in the grid; a refund amount can only be lowered in the Approval step (above).
+- Open: Enter or F2 on the focused cell (or double-click) opens a large-text editor popup; the cell's accessible name is "Draft text, editable. Press Enter to edit." Save with Ctrl/Cmd+Enter or by tabbing out; Esc cancels and restores the text. The editor announces "Editing draft. Control Enter saves, Escape cancels." (Confirm exact key handling of the large-text editor in a spike.)
+- Result: a saved change shows the **"Edited by you"** chip in the cell, a polite "Draft saved, marked edited by you", and **Restore Steward's draft**. The confirm dialog shows the diff, and the Audit Entry records the edited field. Empty text or over-length is refused inline ("A draft can't be empty."); a failed save keeps your text. An unchanged edit adds no mark. Locked once Executing.
+- Mobile list mode: the same edit opens as the drawer textarea ("Edit draft" button).
+
+**Propose refund (deterministic).** On a captured Order or Transaction row in `/risk` (action column, and the Order detail drawer, hotkey `P`), **Propose refund** builds a refund Proposal in code (basis Full by default, amount computed from the Order, refundable remainder shown). No AI drafting is needed; Steward may add a short explanation line, labeled as Steward's, if available. It lands in the Refunds group and still needs Approval like any other Proposal. Disabled with a reason when open work exists ("There's already open work on this Order. Open it."). Feedback: "Refund Proposal added to your queue. Nothing is sent until you approve."
+
 **Approval confirm dialog** (`role="alertdialog"`, modal, focus trapped, initial focus on *Cancel* so Enter can't approve by reflex; Esc cancels; 480px, `--radius-sheet`, `--shadow-dialog`; bottom sheet on mobile)
 ```
 +----------------------------------------------+
@@ -385,7 +392,7 @@ Three consequence tiers, same layout: *Moves money* (refund, accept Dispute): ".
 
 **Standing Policies page** (`/policies`, invoice reminders only, off by default). Each policy reads as one sentence with inline fields: "Send the standard reminder for Overdue Invoices more than [7] days late and under [$500.00], at most [5] a day." Toggle label "Off / On". The page states: **"Policy reminders use a fixed template. No AI writes them."** and shows the template text read-only beside the fields. Each policy shows its last run and **skip counts**: "Last run 7:30 pm: sent 3, skipped 2 (already has open work)." Skips are listed with the reason; every run and every send is an Audit Entry ("Approved by Standing Policy"). Refunds and Dispute responses are never covered; the page says so.
 
-**Settings / Demo** (`/settings`). Read-only "Dispute source: Simulated (set by the DISPUTE_SOURCE environment setting; it can't be changed here)", showing Live / Simulated / Mixed. Telemetry (tokens, cost per session), **Reset demo**, sign out. Reset dialog: "Start a fresh demo round?" / **"This resets the demo for everyone viewing it."** / "Starts a fresh demo round. History stays in the Audit Log. Open Proposals from the previous round show as Expired." Buttons **Cancel** and **Start fresh round**. Resets are rate-limited, so the Reset button has a cooldown state: disabled, label "Available again in 12 min" (counts down each minute, polite status on change, reason in `aria-describedby`); at the daily limit it reads "Daily reset limit reached. Available again tomorrow." Afterward the queue shows the old Proposals in a collapsed "Earlier round (Expired)" group.
+**Settings / Demo** (`/settings`). Read-only "Dispute source: Simulated (set by the DISPUTE_SOURCE environment setting; it can't be changed here)", showing Live / Simulated / Mixed. Telemetry (tokens, cost per session), **Reset demo**, sign out. Reset dialog: "Start a fresh demo round?" / **"This resets the demo for everyone viewing it."** / "Starts a fresh demo round. History stays in the Audit Log. Open Proposals from the previous round show as Expired. Anything Unconfirmed stays in your queue, because PayPal may have done it." Buttons **Cancel** and **Start fresh round**. Resets are rate-limited, so the Reset button has a cooldown state: disabled, label "Available again in 12 min" (counts down each minute, polite status on change, reason in `aria-describedby`); at the daily limit it reads "Daily reset limit reached. Available again tomorrow." Afterward the queue shows the old Proposals in a collapsed "Earlier round (Expired)" group. Old-round `outcome_unknown` rows are *not* in that group: they stay visible and actionable in their own "Unconfirmed" group (above the kind groups, expanded, Check again and the two Merchant confirmations available) until settled.
 
 **Toasts and inline results.** Decisions report *in place* (dialog, then row stamp); toasts only for background events and batch results. Region bottom-left (bottom-center on mobile), max 3, `role="status"` for success/info, auto-dismiss 6 s and pause on hover/focus; errors use `role="alert"`, never auto-dismiss, always carry a next step. Slide in via transform+opacity; reduced motion: opacity only. Examples: "3 reminders sent. 3 Audit Entries recorded." / "1 of 3 didn't go through. Maple St Cafe's reminder was not sent. [Review]". Inline errors: ink text with a berry left rule and a leading glyph, `aria-live="polite"`.
 
@@ -407,20 +414,19 @@ Voice: calm, precise. Say "Steward", never "we". Lead with the fact, then the de
 | Edited refund | "Edited by you: $250.00 instead of $432.00." |
 | Reset demo | "This resets the demo for everyone viewing it." / "Available again in 12 min" |
 | Policy note | "Policy reminders use a fixed template. No AI writes them." |
-| Budget reached | "Steward has reached today's demo budget. You can keep reviewing; asking resumes at 00:00 UTC." |
+| Budget reached | "Steward has reached today's demo allowance. It resets at midnight UTC. You can keep reviewing; asking resumes then." |
 
 ## 8. Accessibility (WCAG 2.2 AA)
 
 - [ ] Contrast per section 2; verified in CI (token unit test + axe 0 serious/critical). Placeholder text uses `ink-muted`.
 - [ ] **Never color alone** (1.4.1): risk = glyph + word; status = glyph + word; deadline urgency = text tier + glyph; the margin rule is backed by an `sr-only` "Needs your decision" prefix in the row's accessible name.
 - [ ] **Focus visible and not obscured** (2.4.7, 2.4.11): app-wide `--focus-ring` (7.8:1); sticky masthead and drawer footer offset with `scroll-padding`; focus never lands under the Copilot or toasts.
-- [ ] **Keyboard (2.1.1, 2.1.2, 2.4.3)**: skip links ("Skip to queue", "Skip to Steward"); focus order masthead -> page filter -> grid -> status bar -> Copilot (`<aside aria-label="Steward copilot">`, last in DOM, visually right). Grid: Tab enters once, arrows move cell to cell, Enter opens drawer, `A`/`R` approve/reject the focused row, `E` expands the detail row, `/` focuses Quick Filter, `?` lists shortcuts, Esc closes drawer/dialog. Single-key shortcuts are active only while focus is inside the grid (2.1.4); Cmd/Ctrl+K is the only global one. Whether Tab reaches buttons inside cells needs a spike; hotkeys are the guaranteed path.
+- [ ] **Keyboard (2.1.1, 2.1.2, 2.4.3)**: skip links ("Skip to queue", "Skip to Steward"); focus order masthead -> page filter -> grid -> status bar -> Copilot (`<aside aria-label="Steward copilot">`, last in DOM, visually right). Grid: Tab enters once, arrows move cell to cell, Enter opens drawer, `A`/`R` approve/reject the focused row, `E` expands the detail row, `/` focuses Quick Filter, `?` lists shortcuts, Esc closes drawer/dialog, F2 edits the draft, `P` on `/risk` proposes a refund. Single-key shortcuts are active only while focus is inside the grid (2.1.4); Cmd/Ctrl+K is the only global one. Whether Tab reaches buttons inside cells needs a spike; hotkeys are the guaranteed path.
 - [ ] **Full approve path by keyboard**: arrow to row -> Enter -> read drawer -> Tab to Approve -> Enter -> dialog (focus on Cancel) -> Tab to confirm -> Enter -> result heading focused -> Esc/Back returns focus to the row; after a decision focus moves to the next row, never `<body>`.
 - [ ] **Grid semantics**: native AG Grid `role="grid"`; `aria-label="Approval Queue, 6 Proposals"`; group rows expose expanded state; custom renderers always output real text (pill word, stamp word, formatted money). Action buttons have specific `aria-label`s; icons `aria-hidden`.
-- [ ] **Dialogs and drawer**: `alertdialog` for confirm, `dialog` for drawer; labelled by heading, described by consequence text; focus trapped and restored; background `inert`. The "Checking PayPal" and "Sending" states are announced once via a polite status.
+- [ ] **Dialogs and drawer**: `alertdialog` for confirm, `dialog` for drawer; labelled by heading, described by consequence text; focus trapped and restored; background `inert`; "Sending", "Checking PayPal" and "Draft saved" announced once via a polite status. Draft editor: Enter/F2 opens, Esc cancels, focus returns to the cell.
 - [ ] **Streaming (Copilot and Brief)**: message list `role="log"` `aria-live="off"`; a separate polite node announces "Steward is answering" then "Answer ready, 2 sources, 3 Proposals drafted" (and "Summary ready" for the Brief); streaming containers use `aria-busy`; Stop is reachable; citation chips are links with names ("Source 1: Dispute DSP-9921").
-- [ ] **Target size (2.5.8)**: >= 24x24 everywhere; 44px on `pointer: coarse`; >= 8px between Approve and Reject (side by side on mobile, Approve last).
-- [ ] **No drag-only** actions (2.5.7); no timed approval. **Accessible auth (3.3.8)**: paste and password managers allowed. **Consistent help (3.2.6)**: Ask Steward in the same place on every page. **Redundant entry (3.3.7)**: rejection reason, edited draft and edited amount survive a failed save.
+- [ ] **Target size (2.5.8)**: >= 24x24 everywhere; 44px on `pointer: coarse`; >= 8px between Approve and Reject (side by side on mobile, Approve last). **No drag-only** actions (2.5.7); no timed approval. **Accessible auth (3.3.8)**: paste and password managers allowed. **Consistent help (3.2.6)**: Ask Steward in the same place on every page. **Redundant entry (3.3.7)**: rejection reason, edited draft and edited amount survive a failed save.
 - [ ] **Motion**: transform/opacity only; `prefers-reduced-motion` removes stamp scale/rotation, slides and pulses (cut or crossfade); no auto-playing loops; the countdown never animates.
 - [ ] **Reflow and zoom**: works at 320 CSS px and 400% zoom with no page-level horizontal scroll (the grid scrolls inside its own region only at 768-1023); text resizes to 200%; `lang="en"`; one `h1` per page; landmarks banner, nav (`aria-label="Main"`), main, complementary.
 - [ ] **Forced colors**: pills and stamps keep borders and words; margin rule duplicated as a 3px border. **Tests:** axe in Playwright on every page; VoiceOver and NVDA on the approve path; keyboard-only, 200% / 400% zoom and reduced-motion runs.
@@ -429,8 +435,7 @@ Voice: calm, precise. Say "Steward", never "we". Lead with the fact, then the de
 
 | Width | Shell | Queue grid | Drawer / dialog | Copilot |
 |---|---|---|---|---|
-| 320-479 | Masthead 48px (wordmark, Sandbox chip, menu); bottom tab bar | List mode: full-width row renderer, auto height >= 96, groups kept | Full-screen sheet; dialog = bottom sheet | Full-screen via "Ask" tab |
-| 480-767 | Same; hero figure scales via clamp | List mode, two-line rows | Bottom sheet 90vh | Full-screen |
+| 320-767 | Masthead 48px (wordmark, Sandbox chip, menu); bottom tab bar; hero scales via clamp | List mode: full-width row renderer, auto height >= 96, groups kept | Full-screen sheet (90vh at 480+); dialog = bottom sheet | Full-screen via "Ask" tab |
 | 768-1023 | Index tabs in a scrollable strip (no page overflow); no bottom bar | Subject pinned left, Risk, Amount, Deadline, Actions pinned right; middle scrolls inside the grid; sparkline and Recommends hidden | Right drawer 480px, overlays | Sheet from right, toggled by Ask |
 | 1024-1439 | Full masthead; Copilot collapsible | All columns except Recommends | Right drawer 520px, overlays | Docked 340px; auto-collapse when drawer opens |
 | >= 1440 | Content max-width 1180px + Copilot 380px | All columns | Drawer pushes grid | Docked 380px |
@@ -446,15 +451,13 @@ Voice: calm, precise. Say "Steward", never "we". Lead with the fact, then the de
 ## 10. Open design risks
 
 - **AG Grid Enterprise key (decision date Oct 20):** grouping, status bar, master/detail, sparklines and the chart depend on it. The Community fallback (section 2) is complete but weakens the prize story; record the video only with the build that ships.
-- **Cell focus vs buttons:** Tab behavior inside AG Grid cells needs a spike; hotkeys are the safety net.
-- **Mobile list mode** uses a full-width renderer, which gives up column sort and group menus on small screens; filter and group remain.
+- **Spikes:** Tab behavior inside AG Grid cells (hotkeys are the safety net) and large-text cell editor key handling.
+- **Mobile list mode** gives up column sort and group menus on small screens; filter and group remain.
 - **Fonts and CLS:** subset and preload two files; the Brief's model slot must reserve its height. Test with the slowest stream.
 - **Simulated disputes** must be unmistakable (chip, row tag, dialog line, stamp) for SC-19. The chip appears only when `DISPUTE_SOURCE` is not `live`.
-- **Contrast values** are hand-computed; treat the table as a target until the CI token test passes.
-- **Dispute fee amount** is never shown as a number until confirmed on PayPal's fee page (A-16).
+- **Contrast values** are hand-computed (CI token test confirms). Dispute fee amounts are never shown until confirmed on PayPal's fee page (A-16).
 
 ## 11. Cut list
 
 - **Night theme (cut, R10).** No dark tokens ship and no `[data-theme]` switch exists. Colors are semantic variables, so a theme could be added later. Remove any toggle from Settings and from the masthead menu.
-- **Integrated charts beyond `/risk`** (queue "amount at stake" chart, invoice-aging chart): cut; exactly one chart ships.
-- **Runtime data-source toggle:** cut; Settings shows `DISPUTE_SOURCE` read-only.
+- **Other charts** (queue "amount at stake", invoice aging) and a **runtime data-source toggle:** cut; one chart ships and Settings shows `DISPUTE_SOURCE` read-only.

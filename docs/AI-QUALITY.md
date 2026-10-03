@@ -187,7 +187,8 @@ This needs `security-auditor` sign-off at 0.5c.
 PayPal is mocked with MSW from fixtures (no sandbox calls, so runs are deterministic). The model calls are live.
 
 `pnpm eval --suite smoke|golden|injection|drafts|full [--runs 3] [--budget-usd 10] [--model-override …]`
-- Every trial writes an `ai_runs` row with `purpose='eval'`.
+- Every call writes an `ai_runs` row (`scope='eval'`) to the runner's **local or CI DB**.
+- It also writes one settled row to `eval_spend` in the Render DB (R27).
 - The runner aborts when projected spend passes `--budget-usd`.
 - It prints accuracy, a confusion matrix, per-reason recall, the filed-reason baseline, failures with diffs, and cost/latency (p50/p95).
 
@@ -286,7 +287,7 @@ Each injected fixture has a **clean twin** with the same data and no payload.
 | SC-6 | Validator plus a ledger check | 100% of saved Proposals have ≥ 1 resolving ref, 0 dangling. Every `must_cite` ref is present in ≥ 90% of cases (reported). The pre-save rejection rate is reported, target ≤ 5%. |
 | SC-7 | Rendered draft vs source records | 100%: invoice number, amount, currency, due date and recipient match. No currency amounts or dates typed by the model outside placeholders. |
 | Draft quality | **LLM-as-judge** (§5), Sonnet 5.5 judging Opus drafts | ≥ 90% of drafts pass the rubric. Before the judge is trusted, it must agree ≥ 80% with 12 human-labeled drafts. |
-| SC-16 | `ai_runs` sum for the run | Full suite ≤ budget (below) |
+| SC-16 | `eval_spend` sum for the run's `run_id` | Full suite ≤ budget (below) |
 
 **Cost (estimated; replace with measured values after the first run):**
 - golden ≈ $3 (Opus assessment dominates)
@@ -296,7 +297,13 @@ Each injected fixture has a **clean twin** with the same data and no payload.
 
 That is within **≤ $10 per full run** (A-9), and the runner's default `--budget-usd` is 10.
 
-**Cumulative eval-spend guard (R20).** Before starting, `evals/run.ts` sums `ai_runs.cost_usd` where `purpose='eval'`. It refuses to start if that sum plus `--budget-usd` would exceed **$90**. The project total stays ≤ $150 (A-9).
+**Cumulative eval-spend guard (R20, R27).**
+- The Render DB holds an append-only table `eval_spend(run_id, call_id, cost_usd, created_at)`. The `steward_eval` role has INSERT and SELECT on it only.
+- The runner writes one settled row per model call.
+- Before starting, `evals/run.ts` sums `eval_spend.cost_usd`. It refuses to start if that sum plus `--budget-usd` would exceed **$90**.
+- Eval `ai_runs` never go to the Render DB.
+
+This budget is separate from the demo's (§6). Per D-11, the worst case is ≈ $210 total (evals $90 plus demo $120). The Anthropic console limit is set to $220 as the outer backstop.
 
 Planned eval spend (estimates; the guard enforces the cap):
 
@@ -311,7 +318,7 @@ The deep run (§4.2, ≈ $11) is optional. It runs only if the guard shows enoug
 
 ### 4.4 CI policy
 - **Every PR, no key needed:** unit tests for normalizer, fencing, ref grammar, validators, placeholder renderer and output checks, plus schema round-trips. These are required checks.
-- **PR with `ANTHROPIC_API_KEY`** (not on fork PRs): `--suite smoke`, budget $1:
+- **PR with `ANTHROPIC_API_KEY`** (not on fork PRs): `--suite smoke`, budget $1. The job is **skipped until the 0.3b guard (`eval_spend` + cumulative check) exists** (R31 m9):
   - 8 stratified golden cases (fixed list)
   - 8 injection payloads × 1 run, rotating surfaces
   - Smoke injection must be 100% contained (gating)
@@ -325,7 +332,7 @@ The deep run (§4.2, ≈ $11) is optional. It runs only if the guard shows enoug
   - `evals/**`
 - **Full suite** (`--suite full`): runs **only** at the tag gates v0.3, v0.4 and v0.5, plus one manual pre-submission run (R20). A full pass is required to tag.
 - **Deep run:** manual only, and only within the cumulative guard.
-- Every live-model job checks the cumulative eval guard first. The results summary is committed for ACCEPTANCE.md and FR-5.6.
+- Every live-model job checks the cumulative `eval_spend` guard first. The results summary is committed for ACCEPTANCE.md and FR-5.6.
 
 ## 5. Draft quality rubric (dispute responses, reminders, Customer notes)
 The judge returns `{ scores, failures[], pass }` via `Output.object`. Each criterion is scored 1–4. **Pass** = every criterion ≥ 3, plus the hard fails below.
@@ -351,7 +358,13 @@ Code pre-checks run before the judge:
   - newest 10 messages
   - Untrusted Text truncation per §3
 - **Per-session cap:** 100k tokens (A-9). Chat is limited to 20 requests per IP per 10 minutes.
-- **Daily spend ceiling:** $10 (A-9), enforced by `lib/guard`: `reserveSpend` reserves the worst-case cost before each call, and `settleSpend` records the actual cost after it. When reached, the system fails closed: chat says it's paused until tomorrow, and pipelines show deterministic data and template drafts. Eval calls also go through `reserveSpend` (purpose `eval`). They reserve against the run's `--budget-usd`, not the demo ceiling.
+- **Demo budget (R30, D-11).** `lib/guard` enforces it on the demo scope:
+  - `reserveSpend` reserves the worst-case cost before each call, checking the daily ceiling and the cumulative cap. `settleSpend` records the actual cost after the call.
+  - The daily ceiling is **$5/day until Nov 12**, then **$3/day** through Dec 15.
+  - The **cumulative demo cap is $120**.
+  - When either limit is hit, the system fails closed with the existing visible "budget reached" state, never silently. Chat says it's paused, and pipelines show deterministic data and template drafts.
+- **Eval budget:** evals use their own scope. They reserve against `--budget-usd` and the $90 `eval_spend` cap (§4.3), never the demo budget.
+- **Combined worst case:** ≈ $210, with the $220 Anthropic console limit as the backstop.
 - **Prices** were verified on Anthropic's own pricing page (`docs.claude.com/en/docs/about-claude/pricing`) on **2026-10-03**. They are held as config constants (`MODEL_PRICES` with `PRICES_VERIFIED_AT = '2026-10-03'` in `lib/ai/models`, PLAN §6), and `cost_usd` is computed from them. Per MTok:
 
   | Model | Input | Output | 5-min cache write | Cache hit |
@@ -376,6 +389,7 @@ Code pre-checks run before the judge:
   - Cache reads cost 0.1× input (0.05× on Opus 5.5).
   - Integration test: on the second identical call, `usage.inputTokenDetails.cacheReadTokens > 0`.
 - **`ai_runs` row (one per model call; chat turns are grouped by `run_id`):**
+  - `scope`: `demo` (hosted app) or `eval` (runner DB only). The demo telemetry panel filters `scope='demo'`.
   - IDs and context: `id`, `run_id`, `session_hash`, `purpose` (`chat`, `classify`, `dispute_assess`, `reminder_draft`, `risk_explain`, `brief`, `eval`, `judge`), `model`, `model_fallback_from`, `effort`, `prompt_version`
   - Tokens: `input_tokens`, `cache_read_tokens`, `cache_write_tokens`, `output_tokens`, `reasoning_tokens`
   - Cost and timing: `cost_usd` (from a versioned price table in config), `latency_ms`, `ttft_ms`, `steps`
@@ -420,4 +434,8 @@ These are definitions only. No outcome numbers are claimed until measured. Every
 - **`security-auditor`:** review §3, the template-only Standing Policy reminders (sign-off at 0.5c), the markdown renderer (no remote images or auto-links from model output), and the output-check allowlist.
 - **`data-engineer`:** fixture realism and the 44-case golden set.
 - **`architect`:** pipeline vs. chat split.
-- **Resolved:** full eval ≤ $10 per run and ≤ $90 cumulative (A-9, R20); no temperature in R5; template-only policy reminders (R6).
+- **Resolved:**
+  - Full eval ≤ $10 per run and ≤ $90 cumulative via `eval_spend` (R20, R27).
+  - Demo ≤ $120 cumulative at $5/$3 per day (R30, D-11).
+  - No temperature in R5.
+  - Template-only policy reminders (R6).
