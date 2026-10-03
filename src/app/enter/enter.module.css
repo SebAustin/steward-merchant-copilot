@@ -1,0 +1,46 @@
+/* A ledger cover, not a hero: ruled paper, one sheet, one field. */
+.cover {
+  display: grid;
+  min-height: 100dvh;
+  padding: var(--gutter);
+  place-items: center;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--row-h) - 1px),
+    color-mix(in srgb, var(--color-line) 40%, transparent) calc(var(--row-h) - 1px),
+    color-mix(in srgb, var(--color-line) 40%, transparent) var(--row-h)
+  );
+}
+
+.sheet {
+  display: grid;
+  gap: var(--space-4);
+  width: min(26rem, 100%);
+  padding: var(--space-6) var(--space-6) var(--space-7);
+  border: 1px solid var(--color-line-strong);
+  border-left: 3px solid var(--color-signal);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-dialog);
+}
+
+.wordmark {
+  font-size: var(--text-hero);
+  font-style: italic;
+  font-weight: 500;
+  font-variation-settings: 'opsz' 144;
+  line-height: var(--leading-tight);
+}
+
+.title {
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.lede {
+  max-width: 24rem;
+}
