@@ -1,0 +1,15 @@
+title = "Steward gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dummy CI values and placeholder examples; these are not secrets."
+paths = [
+  '''^\.env\.ci$''',
+  '''^\.env\.example$''',
+]
+# Obviously fake secrets used by unit tests (e.g. "route-test-secret-0123456789-abcdefghij").
+regexes = [
+  '''[a-z]+-test-secret-[0-9a-z-]+''',
+]
