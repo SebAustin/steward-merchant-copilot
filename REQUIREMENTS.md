@@ -35,7 +35,7 @@ Claims not in the table are qualitative only. Rule for all later docs (README, D
 - NG1. No real money and no live PayPal environment. **Sandbox only.** Production credentials are never requested or stored.
 - NG2. No multi-tenant auth, signup, or billing. One demo merchant. A demo passcode and rate limits are abuse controls, not an identity system.
 - NG3. No mobile app. The web UI must be usable and not broken on small screens, but it is not a mobile product.
-- NG4. No autonomous execution of write actions, including "auto-approve low-risk" rules.
+- NG4. No autonomous execution of write actions, with one deliberate exception (D-3): a Merchant-enabled Standing Policy may pre-approve **invoice reminders only**, within caps, without Untrusted Text in the draft, and with every run audited. Refunds and Dispute actions are never auto-approved.
 - NG5. No emailing or messaging customers outside PayPal's own invoice-reminder / dispute-message channels.
 - NG6. No accounting, tax, inventory, or non-PayPal payment processors.
 - NG7. No model training or fine-tuning; no vector database unless a slice proves it is needed.
@@ -185,7 +185,7 @@ Prize-stacking note (from search summary of the rules): a project can win at mos
 | R2 | Toolkit vs AI SDK 7 incompatibility, or missing tool coverage (e.g., refunds) | Day-1 spike; own adapter; direct REST |
 | R3 | AG Grid Enterprise features watermarked without a key | Request hackathon key; design with Community fallback |
 | R4 | Public demo abuse and cost | NFR-C1, passcode |
-| R5 | LLM nondeterminism makes 100% containment flaky | Containment enforced structurally (NFR-S1/S4), evals as confirmation, temperature 0 |
+| R5 | LLM nondeterminism makes 100% containment flaky | Containment enforced structurally (NFR-S1/S4), evals as confirmation. Determinism comes from structured outputs, strict tool schemas, code validators and 3× repeated eval runs. Sonnet 5.5 and Opus 5.5 reject non-default temperature, so we use none (see docs/AI-QUALITY.md). |
 | R6 | Render free Postgres or service sleep breaks the demo or judging window | Verify plan limits Day 1; keep-warm and paid-tier decision |
 
 ## References
