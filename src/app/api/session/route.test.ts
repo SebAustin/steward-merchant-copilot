@@ -105,6 +105,15 @@ describe('POST /api/session (passcode login)', () => {
     expect(locked.headers.get('set-cookie')).toBeNull()
   })
 
+  it('does not count successful logins against the limit', async () => {
+    const ip = newIp()
+    for (let i = 0; i < 7; i++) expect((await login(PASSCODE, { ip })).status).toBe(200)
+
+    // The allowance for wrong guesses is still intact afterwards.
+    for (let i = 0; i < 5; i++) expect((await login('wrong', { ip })).status).toBe(401)
+    expect((await login('wrong', { ip })).status).toBe(429)
+  })
+
   it('does not let a spoofed X-Forwarded-For prefix dodge the limit', async () => {
     const realIp = newIp()
     for (let i = 0; i < 5; i++) {

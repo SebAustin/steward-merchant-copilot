@@ -11,7 +11,7 @@ import { requireSessionAndCsrf } from '@/lib/auth/request'
 import { SESSION_TTL_MS, createSessionId, signSession } from '@/lib/auth/session'
 import { getEnv } from '@/lib/env'
 import { enforceRouteLimit } from '@/lib/guard/route-limit'
-import { rateLimit } from '@/lib/guard/rate-limit'
+import { rateLimit, refundRateLimit } from '@/lib/guard/rate-limit'
 import { jsonError } from '@/lib/http/respond'
 import { log } from '@/lib/log'
 
@@ -31,8 +31,11 @@ export async function POST(request: Request): Promise<Response> {
     const limited = await enforceRouteLimit(request, 'session')
     if (limited) return limited
 
+    // Every attempt is counted before the passcode is checked (so parallel guesses cannot
+    // outrun the limit); a correct passcode is refunded below, so only wrong guesses use it up.
+    const attemptKey = `login:${clientIp(request.headers, env.TRUSTED_PROXY_HOPS)}`
     const attempts = await rateLimit(getDb(), {
-      key: `login:${clientIp(request.headers, env.TRUSTED_PROXY_HOPS)}`,
+      key: attemptKey,
       limit: LOGIN_ATTEMPTS,
       windowSec: LOGIN_WINDOW_SEC,
     })
@@ -47,6 +50,8 @@ export async function POST(request: Request): Promise<Response> {
     if (!passcodeMatches(parsed.data.passcode, env.DEMO_PASSCODE)) {
       return jsonError(401, 'invalid_passcode', "That passcode doesn't match.")
     }
+
+    await refundRateLimit(getDb(), { key: attemptKey, windowStart: attempts.windowStart })
 
     const sid = createSessionId()
     await getDb()

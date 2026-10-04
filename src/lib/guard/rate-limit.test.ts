@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { testDb, testPool, uid } from '../../../test/setup/db'
-import { rateLimit } from './rate-limit'
+import { rateLimit, refundRateLimit } from './rate-limit'
 
 const pool = testPool()
 const db = testDb(pool)
@@ -53,5 +53,28 @@ describe('rateLimit', () => {
     )
 
     expect(results.filter((r) => r.allowed)).toHaveLength(5)
+  })
+
+  it('gives an attempt back when it is refunded, so successes can be exempt', async () => {
+    const key = uid('refund')
+    const first = await rateLimit(db, { key, limit: 2, windowSec: 60, now: T0 })
+    await rateLimit(db, { key, limit: 2, windowSec: 60, now: T0 })
+    expect((await rateLimit(db, { key, limit: 2, windowSec: 60, now: T0 })).allowed).toBe(false)
+
+    await refundRateLimit(db, { key, windowStart: first.windowStart })
+    await refundRateLimit(db, { key, windowStart: first.windowStart })
+
+    // Two refunds on top of the refused third attempt leave room for one more.
+    expect((await rateLimit(db, { key, limit: 2, windowSec: 60, now: T0 })).allowed).toBe(true)
+  })
+
+  it('never refunds below zero', async () => {
+    const key = uid('floor')
+    const first = await rateLimit(db, { key, limit: 1, windowSec: 60, now: T0 })
+    await refundRateLimit(db, { key, windowStart: first.windowStart })
+    await refundRateLimit(db, { key, windowStart: first.windowStart })
+
+    expect((await rateLimit(db, { key, limit: 1, windowSec: 60, now: T0 })).allowed).toBe(true)
+    expect((await rateLimit(db, { key, limit: 1, windowSec: 60, now: T0 })).allowed).toBe(false)
   })
 })
