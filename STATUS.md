@@ -24,6 +24,7 @@
 - Probes P0-5, P0-6 (partly), P0-8 recorded in PLAN §1.
 
 ## Next
+- TODO (0.1c): move `@paypal/agent-toolkit` from `devDependencies` back to `dependencies` when the runtime first imports it (it is dev-only until then).
 - 0.1b (no creds): `callRead` + allow-list, MSW handlers (the toolkit uses two hosts, see PLAN §1 P0-8), `/invoices` grid. Then 0.1c (needs the owner's `.env`: PayPal sandbox app + Anthropic key). The owner calendar is in PLAN §8.
 
 ## Blocked on owner

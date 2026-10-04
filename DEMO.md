@@ -15,7 +15,7 @@ pnpm dev                  # http://localhost:3000
 
 1. Open <http://localhost:3000>. You are redirected to `/enter`.
 2. Enter the passcode from your `.env` (`DEMO_PASSCODE`, default `change-me-demo-passcode`).
-3. A wrong passcode shows an inline message and keeps focus in the field. Only wrong guesses count: the sixth wrong try in 10 minutes from one address shows "Too many tries." A shared office network shares one allowance. Successful logins are capped at 20 per address per hour.
+3. A wrong passcode shows an inline message and keeps focus in the field. Only wrong guesses count: the sixth wrong try in 10 minutes from one address shows "Too many tries." A shared office network shares one allowance. Successful logins are capped at 60 per address per hour.
 
 ## What you see
 

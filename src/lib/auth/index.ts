@@ -39,7 +39,7 @@ const defaultDeps = (): AuthDeps => ({ db: getDb(), env: getEnv() })
 export const LOGIN_ATTEMPTS = 5
 export const LOGIN_ATTEMPT_WINDOW_SEC = 10 * 60
 /** Successful logins allowed per client address and hour (bounds session-row creation). */
-export const LOGIN_SUCCESS_CAP = 20
+export const LOGIN_SUCCESS_CAP = 60
 export const LOGIN_SUCCESS_WINDOW_SEC = 60 * 60
 
 const hashSid = (sid: string) => createHash('sha256').update(sid).digest('hex')
