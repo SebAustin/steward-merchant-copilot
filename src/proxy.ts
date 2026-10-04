@@ -12,11 +12,13 @@ const ENTER_PATH = '/enter'
  */
 const PUBLIC_PATHS: ReadonlySet<string> = new Set([ENTER_PATH, '/api/session', '/api/health'])
 
-type Decision = 'allow' | 'redirect-to-enter' | 'redirect-to-brief' | 'unauthorized'
+type Decision = 'allow' | 'redirect-to-enter' | 'unauthorized'
 
 function decide(pathname: string, hasSession: boolean): Decision {
-  if (hasSession) return pathname === ENTER_PATH ? 'redirect-to-brief' : 'allow'
-  if (PUBLIC_PATHS.has(pathname)) return 'allow'
+  // A signed cookie proves nothing about revocation, so even /enter stays reachable: bouncing a
+  // revoked cookie off /enter while pages bounce it back would loop. The /enter page does the
+  // database-checked redirect for visitors who really are signed in.
+  if (hasSession || PUBLIC_PATHS.has(pathname)) return 'allow'
   return pathname.startsWith('/api/') ? 'unauthorized' : 'redirect-to-enter'
 }
 
@@ -56,10 +58,7 @@ function respond(request: NextRequest, decision: Decision, csp: string): Respons
       return jsonError({ status: 401, code: 'unauthorized', requestId: crypto.randomUUID() })
     default:
       // The Location must be absolute: Next rejects a relative one from proxy.ts.
-      return NextResponse.redirect(
-        new URL(decision === 'redirect-to-enter' ? ENTER_PATH : '/', request.url),
-        307,
-      )
+      return NextResponse.redirect(new URL(ENTER_PATH, request.url), 307)
   }
 }
 

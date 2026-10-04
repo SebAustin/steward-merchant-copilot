@@ -33,7 +33,7 @@ The hosted demo passcode will be printed here when the demo is published.
 | `pnpm e2e`                    | Playwright smoke on a production build (`pnpm build:ci` first)            |
 | `pnpm db:generate`            | Generate a SQL migration from `src/db/schema.ts`                          |
 
-Run `pnpm exec playwright install chromium` once before `pnpm e2e`. If your Postgres is not the compose one, set `DATABASE_URL` and `TEST_DATABASE_URL` in your shell.
+Run `pnpm exec playwright install chromium` once before `pnpm e2e`. Locally, `pnpm e2e` needs the compose database: `DATABASE_URL=postgres://steward:steward@localhost:54329/steward pnpm e2e` (`.env.ci` points at CI's port 5432). If your Postgres is not the compose one, set `DATABASE_URL` and `TEST_DATABASE_URL` in your shell.
 
 ## Layout
 

@@ -67,6 +67,15 @@ test.describe('@smoke passcode gate to app shell', () => {
     await expect(page).toHaveURL(/\/enter$/)
   })
 
+  test('sends a signed-in visitor from /enter straight to the Brief', async ({ page }) => {
+    await enter(page)
+    await expect(page).toHaveURL('/')
+
+    await page.goto('/enter')
+
+    await expect(page).toHaveURL('/')
+  })
+
   test('navigates the index tabs and marks the current page', async ({ page }) => {
     await enter(page)
     await expect(page).toHaveURL('/')
@@ -83,14 +92,24 @@ test.describe('@smoke passcode gate to app shell', () => {
     ).toHaveAttribute('aria-current', 'page')
   })
 
-  test('signs out through the Maya menu and gates the app again', async ({ page }) => {
+  test('signs out through the Maya menu, gates the app again and revokes the old cookie', async ({
+    page,
+    context,
+  }) => {
     await enter(page)
     await expect(page).toHaveURL('/')
+    const [signedIn] = await context.cookies()
 
     await page.getByText('Maya', { exact: true }).click()
     await page.getByRole('button', { name: 'Sign out' }).click()
 
     await expect(page).toHaveURL(/\/enter$/)
+    await page.goto('/queue')
+    await expect(page).toHaveURL(/\/enter$/)
+
+    // Replaying the old cookie passes proxy.ts (the signature is still valid) but the session
+    // row is gone, so the page must send the visitor back to /enter.
+    await context.addCookies([signedIn!])
     await page.goto('/queue')
     await expect(page).toHaveURL(/\/enter$/)
   })
@@ -111,7 +130,7 @@ test.describe('@smoke passcode gate to app shell', () => {
 
     const health = await request.get('/api/health')
     expect(health.status()).toBe(200)
-    expect(await health.json()).toEqual({ db: true, paypal: 'skipped', model: 'skipped' })
+    expect(await health.json()).toEqual({ checks: { db: true }, skipped: ['paypal', 'model'] })
     const anonymousApi = await request.get('/api/chat')
     expect(anonymousApi.status()).toBe(401)
   })

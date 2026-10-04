@@ -33,7 +33,7 @@ pnpm dev                  # http://localhost:3000
 pnpm lint && pnpm typecheck && pnpm test
 pnpm build:ci && pnpm check-bundle
 pnpm exec playwright install chromium   # once
-pnpm e2e                                 # passcode -> shell smoke, CSP, axe
+DATABASE_URL=postgres://steward:steward@localhost:54329/steward pnpm e2e   # passcode -> shell smoke, CSP, axe
 ```
 
 ## Stubbed in 0.1a

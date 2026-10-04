@@ -40,9 +40,17 @@ describe('proxy', () => {
     expect(visit('/api/health').status).toBe(200)
   })
 
-  it('lets a signed-in visitor into the app and bounces them off the passcode page', () => {
+  it('lets a visitor with a validly signed cookie through, including to the passcode page', () => {
+    // /enter must stay reachable: a revoked session still has a valid signature, and the page
+    // (which checks the session row) decides whether to send them on to the Brief.
     expect(visit('/queue', validCookie()).status).toBe(200)
-    expect(new URL(visit('/enter', validCookie()).headers.get('location') ?? '').pathname).toBe('/')
+    expect(visit('/enter', validCookie()).status).toBe(200)
+  })
+
+  it('does not treat look-alike paths as public', () => {
+    expect(visit('/entering').status).toBe(307)
+    expect(visit('/api/healthz').status).toBe(401)
+    expect(visit('/api/health/../chat').status).toBe(401)
   })
 
   it('treats a forged or expired cookie as anonymous', () => {
