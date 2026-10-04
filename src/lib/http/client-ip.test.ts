@@ -8,6 +8,7 @@ describe('clientIp', () => {
     expect(clientIp(xff('6.6.6.6, 203.0.113.9'), 1)).toEqual({
       bucket: '203.0.113.9',
       short: false,
+      unparseable: false,
     })
   })
 
@@ -16,12 +17,12 @@ describe('clientIp', () => {
   })
 
   it('falls back to a shared bucket when the header is absent, and flags a short chain', () => {
-    expect(clientIp(new Headers(), 1)).toEqual({ bucket: 'unknown', short: true })
-    expect(clientIp(xff('1.1.1.1'), 2)).toEqual({ bucket: 'unknown', short: true })
+    expect(clientIp(new Headers(), 1)).toMatchObject({ bucket: 'unknown', short: true })
+    expect(clientIp(xff('1.1.1.1'), 2)).toMatchObject({ bucket: 'unknown', short: true })
   })
 
   it('ignores the header entirely when no proxy is trusted', () => {
-    expect(clientIp(xff('1.1.1.1'), 0)).toEqual({ bucket: 'unknown', short: false })
+    expect(clientIp(xff('1.1.1.1'), 0)).toMatchObject({ bucket: 'unknown', short: false })
   })
 
   it('buckets IPv6 by /64 so one host cannot rotate through its whole prefix', () => {
@@ -46,5 +47,20 @@ describe('clientIp', () => {
 
   it('puts an unparseable entry in the shared bucket instead of trusting it as a key', () => {
     expect(clientIp(xff('not-an-ip'), 1).bucket).toBe('unknown')
+  })
+
+  it('strips a port from IPv4 and bracketed IPv6 entries so they share the plain address bucket', () => {
+    expect(clientIp(xff('203.0.113.9:51234'), 1).bucket).toBe('203.0.113.9')
+    expect(clientIp(xff('[2001:db8:aaaa:bbbb::1]:443'), 1).bucket).toBe('2001:db8:aaaa:bbbb::/64')
+    expect(clientIp(xff('[2001:db8:aaaa:bbbb::1]'), 1).bucket).toBe('2001:db8:aaaa:bbbb::/64')
+  })
+
+  it('flags an unparseable entry so a misconfiguration is visible', () => {
+    expect(clientIp(xff('not-an-ip'), 1)).toEqual({
+      bucket: 'unknown',
+      short: false,
+      unparseable: true,
+    })
+    expect(clientIp(xff('203.0.113.9'), 1).unparseable).toBe(false)
   })
 })

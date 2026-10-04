@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { errorMessage } from './client'
+import { errorMessage, isSignedOut } from './client'
 import { MESSAGES } from './messages'
 
 describe('errorMessage', () => {
@@ -17,5 +17,14 @@ describe('errorMessage', () => {
       MESSAGES.unavailable,
     )
     expect(await errorMessage(Response.json({ error: {} }))).toBe(MESSAGES.unavailable)
+  })
+})
+
+describe('isSignedOut', () => {
+  it('treats success and 401 (the session is already gone) as signed out, nothing else', () => {
+    expect(isSignedOut(new Response(null, { status: 200 }))).toBe(true)
+    expect(isSignedOut(new Response(null, { status: 401 }))).toBe(true)
+    expect(isSignedOut(new Response(null, { status: 403 }))).toBe(false)
+    expect(isSignedOut(new Response(null, { status: 503 }))).toBe(false)
   })
 })

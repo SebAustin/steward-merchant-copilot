@@ -12,3 +12,6 @@ export async function errorMessage(response: Response): Promise<string> {
 }
 
 export const NETWORK_ERROR_MESSAGE = MESSAGES.unavailable
+
+/** After a sign-out request: done, or the session was already gone server-side (401). */
+export const isSignedOut = (response: Response): boolean => response.ok || response.status === 401

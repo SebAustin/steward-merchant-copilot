@@ -10,6 +10,8 @@ export type ClientIp = Readonly<{
   bucket: string
   /** True when X-Forwarded-For has fewer entries than the trusted hops (a likely misconfiguration). */
   short: boolean
+  /** True when the trusted entry exists but is not an IP address (a likely misconfiguration). */
+  unparseable: boolean
 }>
 
 function ipv6Prefix(address: string): string {
@@ -25,8 +27,15 @@ function ipv6Prefix(address: string): string {
   return `${groups.join(':')}::/64`
 }
 
+/** Drop `[v6]:port`, `[v6]` and `v4:port` wrappers; a bare IPv6 address is left alone. */
+function withoutPort(entry: string): string {
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(entry)
+  if (bracketed?.[1]) return bracketed[1]
+  return /^\d+\.\d+\.\d+\.\d+:\d+$/.test(entry) ? entry.slice(0, entry.lastIndexOf(':')) : entry
+}
+
 function bucketOf(entry: string): string {
-  const address = entry.replace(/^\[|\]$/g, '').split('%')[0] ?? ''
+  const address = withoutPort(entry).split('%')[0] ?? ''
   const mapped = MAPPED_V4.exec(address)?.[1]
   if (mapped) return mapped
   if (isIPv4(address)) return address
@@ -38,13 +47,14 @@ function bucketOf(entry: string): string {
  * hops are client-supplied and ignored, so a spoofed X-Forwarded-For cannot dodge a rate limit.
  */
 export function clientIp(headers: Headers, trustedHops: number): ClientIp {
-  if (trustedHops < 1) return { bucket: UNKNOWN, short: false }
+  if (trustedHops < 1) return { bucket: UNKNOWN, short: false, unparseable: false }
   const forwarded =
     headers
       .get('x-forwarded-for')
       ?.split(',')
       .map((part) => part.trim()) ?? []
   const entry = forwarded[forwarded.length - trustedHops]
-  if (!entry) return { bucket: UNKNOWN, short: true }
-  return { bucket: bucketOf(entry), short: false }
+  if (!entry) return { bucket: UNKNOWN, short: true, unparseable: false }
+  const bucket = bucketOf(entry)
+  return { bucket, short: false, unparseable: bucket === UNKNOWN }
 }

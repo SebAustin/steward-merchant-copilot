@@ -30,6 +30,16 @@ describe('requestClientBucket', () => {
 
     expect(warn).toHaveBeenCalledTimes(1)
     const [fields] = warn.mock.calls[0] as [Record<string, unknown>]
-    expect(fields).toEqual({ entries: 1, trustedHops: 2 })
+    expect(fields).toEqual({ reason: 'short', entries: 1, trustedHops: 2 })
+  })
+
+  it('also warns once when the trusted entry is not an IP address', () => {
+    // TRUSTED_PROXY_HOPS is 2: the entry two from the right is the one that gets trusted.
+    expect(requestClientBucket(req('garbage, 203.0.113.7'))).toBe('unknown')
+    requestClientBucket(req('more-garbage, 203.0.113.7'))
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    const [fields] = warn.mock.calls[0] as [Record<string, unknown>]
+    expect(fields).toEqual({ reason: 'unparseable', entries: 2, trustedHops: 2 })
   })
 })
