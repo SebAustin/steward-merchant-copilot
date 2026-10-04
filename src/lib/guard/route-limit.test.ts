@@ -8,7 +8,8 @@ vi.mock('next/server', async (importOriginal) => ({
 }))
 
 const pool = testPool()
-let enforceRouteLimit: typeof import('./route-limit').enforceRouteLimit
+type Enforce = (request: Request, routeName: string, requestId: string) => Promise<Response | null>
+let enforceRouteLimit: Enforce
 
 beforeAll(async () => {
   vi.stubEnv('DATABASE_URL', TEST_DATABASE_URL)
