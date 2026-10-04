@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { checkHealth, isHealthy } from './check'
+import { checkHealth, createCachedHealth, isHealthy, type HealthReport } from './check'
 
 describe('checkHealth', () => {
-  it('reports the database as up and skips checks that have no credentials yet', async () => {
+  it('reports the database as up and lists checks that have no credentials yet as skipped', async () => {
     const report = await checkHealth({ pingDb: async () => {} })
 
-    expect(report).toEqual({ db: true, paypal: 'skipped', model: 'skipped' })
+    expect(report).toEqual({ checks: { db: true }, skipped: ['paypal', 'model'] })
     expect(isHealthy(report)).toBe(true)
   })
 
@@ -16,23 +16,70 @@ describe('checkHealth', () => {
       },
     })
 
-    expect(report.db).toBe(false)
+    expect(report.checks.db).toBe(false)
     expect(isHealthy(report)).toBe(false)
     expect(JSON.stringify(report)).not.toContain('hunter2')
   })
 
   it('treats a hung database as down once the timeout passes', async () => {
-    const hang = () => new Promise<void>(() => {})
+    const report = await checkHealth({ pingDb: () => new Promise<void>(() => {}), timeoutMs: 20 })
 
-    const report = await checkHealth({ pingDb: hang, timeoutMs: 20 })
+    expect(report.checks.db).toBe(false)
+  })
 
-    expect(report.db).toBe(false)
+  it('calls the failure hook so the cause can be logged elsewhere', async () => {
+    const seen: unknown[] = []
+    await checkHealth({
+      pingDb: async () => {
+        throw new Error('boom')
+      },
+      onError: (error) => seen.push(error),
+    })
+
+    expect(seen).toHaveLength(1)
   })
 })
 
-describe('isHealthy', () => {
-  it('fails on any explicit false but not on skipped', () => {
-    expect(isHealthy({ db: true, paypal: false, model: 'skipped' })).toBe(false)
-    expect(isHealthy({ db: true, paypal: 'skipped', model: true })).toBe(true)
+describe('createCachedHealth', () => {
+  const up: HealthReport = { checks: { db: true }, skipped: [] }
+  const down: HealthReport = { checks: { db: false }, skipped: [] }
+
+  function harness(reports: HealthReport[]) {
+    let now = 0
+    let calls = 0
+    const get = createCachedHealth(async () => reports[Math.min(calls++, reports.length - 1)]!, {
+      now: () => now,
+    })
+    return { get, advance: (ms: number) => (now += ms), calls: () => calls }
+  }
+
+  it('serves a healthy report from memory for 5 minutes so public GETs do not fan out', async () => {
+    const h = harness([up])
+
+    await h.get()
+    h.advance(4 * 60_000)
+    await h.get()
+    expect(h.calls()).toBe(1)
+
+    h.advance(61_000)
+    await h.get()
+    expect(h.calls()).toBe(2)
+  })
+
+  it('re-checks a failing report within seconds so recovery shows quickly', async () => {
+    const h = harness([down, up])
+
+    expect(isHealthy(await h.get())).toBe(false)
+    h.advance(6_000)
+
+    expect(isHealthy(await h.get())).toBe(true)
+  })
+
+  it('shares one in-flight check between concurrent callers', async () => {
+    const h = harness([up])
+
+    await Promise.all(Array.from({ length: 10 }, () => h.get()))
+
+    expect(h.calls()).toBe(1)
   })
 })

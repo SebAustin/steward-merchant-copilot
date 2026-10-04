@@ -2,13 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useId, useRef, useState, type FormEvent } from 'react'
+import { NETWORK_ERROR_MESSAGE, errorMessage } from '@/lib/http/client'
 import styles from './EnterForm.module.css'
-
-const MESSAGES: Readonly<Record<number, string>> = {
-  401: "That passcode doesn't match. It's in the README.",
-  429: 'Too many tries. Please wait 10 minutes.',
-}
-const FALLBACK = 'Steward is unavailable right now. Please try again.'
 
 /** Passcode gate (DESIGN flow f): one field, inline errors, paste and password managers allowed. */
 export function EnterForm() {
@@ -36,9 +31,9 @@ export function EnterForm() {
         router.refresh()
         return
       }
-      setError(MESSAGES[response.status] ?? FALLBACK)
+      setError(await errorMessage(response))
     } catch {
-      setError(FALLBACK)
+      setError(NETWORK_ERROR_MESSAGE)
     }
     // The disabled submit button dropped focus; hand it back to the field so retyping is immediate.
     inputRef.current?.focus()

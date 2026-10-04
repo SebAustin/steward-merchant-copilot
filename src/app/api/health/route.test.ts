@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { TEST_DATABASE_URL } from '../../../../test/setup/db'
 
-type Route = { GET: (r: Request) => Promise<Response> }
+type Route = { GET: (r?: Request) => Promise<Response> }
 let route: Route
 
 beforeAll(async () => {
@@ -13,24 +13,21 @@ beforeAll(async () => {
 
 afterAll(() => vi.unstubAllEnvs())
 
-const get = (ip: string) =>
-  route.GET(new Request('https://steward.test/api/health', { headers: { 'x-forwarded-for': ip } }))
-
 describe('GET /api/health', () => {
-  it('returns pass/fail booleans only, with skipped for checks that await credentials', async () => {
-    const res = await get(`198.51.100.${crypto.randomUUID()}`)
+  it('returns pass/fail booleans only, with skipped checks listed separately', async () => {
+    const res = await route.GET(new Request('https://steward.test/api/health'))
 
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ db: true, paypal: 'skipped', model: 'skipped' })
+    expect(await res.json()).toEqual({ checks: { db: true }, skipped: ['paypal', 'model'] })
     expect(res.headers.get('cache-control')).toBe('no-store')
   })
 
-  it('answers 429 once a client exceeds 60 requests a minute', async () => {
-    const ip = `198.51.100.${crypto.randomUUID()}`
+  it('is not rate limited: a prober hitting it repeatedly always gets an answer', async () => {
     const statuses: number[] = []
-    for (let i = 0; i < 61; i++) statuses.push((await get(ip)).status)
+    for (let i = 0; i < 70; i++) {
+      statuses.push((await route.GET(new Request('https://steward.test/api/health'))).status)
+    }
 
-    expect(statuses.slice(0, 60).every((s) => s === 200)).toBe(true)
-    expect(statuses[60]).toBe(429)
+    expect(new Set(statuses)).toEqual(new Set([200]))
   })
 })

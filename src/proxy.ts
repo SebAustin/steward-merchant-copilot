@@ -1,29 +1,42 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { SESSION_COOKIE } from '@/lib/auth/cookie'
-import { ENTER_PATH, gateDecision, type GateDecision } from '@/lib/auth/gate'
 import { verifySession } from '@/lib/auth/session'
 import { getEnv } from '@/lib/env'
 import { jsonError } from '@/lib/http/respond'
 import { buildCsp, createNonce, securityHeaders } from '@/lib/security/headers'
 
+const ENTER_PATH = '/enter'
 /**
- * Next 16 `proxy` (formerly middleware): per-request nonce CSP, security headers and the
- * signed-cookie gate. No database access here; the cookie signature and expiry are enough.
+ * Paths an anonymous visitor may reach. Exact matches only: a prefix match would let a look-alike
+ * path through. Later slices add their own secret-authenticated routes here (webhooks, cron).
+ */
+const PUBLIC_PATHS: ReadonlySet<string> = new Set([ENTER_PATH, '/api/session', '/api/health'])
+
+type Decision = 'allow' | 'redirect-to-enter' | 'redirect-to-brief' | 'unauthorized'
+
+function decide(pathname: string, hasSession: boolean): Decision {
+  if (hasSession) return pathname === ENTER_PATH ? 'redirect-to-brief' : 'allow'
+  if (PUBLIC_PATHS.has(pathname)) return 'allow'
+  return pathname.startsWith('/api/') ? 'unauthorized' : 'redirect-to-enter'
+}
+
+/**
+ * Next 16 `proxy` (formerly middleware): per-request nonce CSP, security headers and a first,
+ * database-free gate on the signed cookie. It cannot see revoked sessions; pages and route
+ * handlers re-check the session row (`lib/auth`).
  */
 export function proxy(request: NextRequest): Response {
   const env = getEnv()
   const isDev = env.NODE_ENV === 'development'
-  const nonce = createNonce()
-  const csp = buildCsp(nonce, { isDev })
+  const csp = buildCsp(createNonce(), { isDev })
 
   const session = verifySession(
     request.cookies.get(SESSION_COOKIE)?.value,
     env.SESSION_SECRET,
     Date.now(),
   )
-  const decision = gateDecision(request.nextUrl.pathname, session !== null)
+  const response = respond(request, decide(request.nextUrl.pathname, session !== null), csp)
 
-  const response = respond(request, decision, nonce, csp)
   response.headers.set('Content-Security-Policy', csp)
   for (const [name, value] of Object.entries(securityHeaders({ isDev }))) {
     response.headers.set(name, value)
@@ -31,30 +44,23 @@ export function proxy(request: NextRequest): Response {
   return response
 }
 
-function respond(
-  request: NextRequest,
-  decision: GateDecision,
-  nonce: string,
-  csp: string,
-): Response {
+function respond(request: NextRequest, decision: Decision, csp: string): Response {
   switch (decision) {
-    case 'allow':
-      return NextResponse.next({ request: { headers: forwardedHeaders(request, nonce, csp) } })
+    case 'allow': {
+      // Next reads the nonce from the request's CSP header and stamps it on its own scripts.
+      const headers = new Headers(request.headers)
+      headers.set('Content-Security-Policy', csp)
+      return NextResponse.next({ request: { headers } })
+    }
     case 'unauthorized':
-      return jsonError(401, 'unauthorized', 'Please enter the passcode.')
+      return jsonError({ status: 401, code: 'unauthorized', requestId: crypto.randomUUID() })
     default:
+      // The Location must be absolute: Next rejects a relative one from proxy.ts.
       return NextResponse.redirect(
         new URL(decision === 'redirect-to-enter' ? ENTER_PATH : '/', request.url),
         307,
       )
   }
-}
-
-function forwardedHeaders(request: NextRequest, nonce: string, csp: string): Headers {
-  const headers = new Headers(request.headers)
-  headers.set('x-nonce', nonce)
-  headers.set('Content-Security-Policy', csp)
-  return headers
 }
 
 export const config = {

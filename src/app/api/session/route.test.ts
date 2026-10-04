@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { MESSAGES } from '@/lib/http/messages'
 import { csrfTokenFor } from '@/lib/auth/csrf'
 import { verifySession } from '@/lib/auth/session'
-import { TEST_DATABASE_URL, testPool, uid } from '../../../../test/setup/db'
+import { TEST_DATABASE_URL, randomIp, testPool } from '../../../../test/setup/db'
 
 const SECRET = 'route-test-secret-0123456789-abcdefghij'
 const PASSCODE = 'espresso-2026'
@@ -26,7 +27,13 @@ afterAll(async () => {
 })
 
 /** A unique client address per test keeps rate-limit buckets independent. */
-const newIp = () => `203.0.113.${Math.floor(Math.random() * 250) + 1}-${uid('ip')}`
+const newIp = randomIp
+
+// `after()` needs a Next request scope; run the callback inline instead.
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  after: (work: () => unknown) => void Promise.resolve(work()),
+}))
 
 function login(
   passcode: unknown,
@@ -75,7 +82,13 @@ describe('POST /api/session (passcode login)', () => {
 
     expect(res.status).toBe(401)
     expect(res.headers.get('set-cookie')).toBeNull()
-    expect(await res.json()).toMatchObject({ error: { code: 'invalid_passcode' } })
+    expect(await res.json()).toMatchObject({
+      error: {
+        code: 'invalid_passcode',
+        message: MESSAGES.invalid_passcode,
+        requestId: expect.any(String),
+      },
+    })
   })
 
   it('rejects malformed bodies', async () => {
@@ -153,6 +166,16 @@ describe('DELETE /api/session (sign out)', () => {
     expect(
       (await logout({ cookie, origin: 'https://evil.example', 'x-csrf-token': csrf })).status,
     ).toBe(403)
+  })
+
+  it('rejects the old cookie after sign-out, even with a valid CSRF token', async () => {
+    const { cookie, csrf } = await signedIn()
+    const headers = { cookie, origin: ORIGIN, 'x-csrf-token': csrf }
+    expect((await logout(headers)).status).toBe(200)
+
+    const replay = await logout(headers)
+
+    expect(replay.status).toBe(401)
   })
 
   it('clears the cookie when the CSRF token and Origin check out', async () => {

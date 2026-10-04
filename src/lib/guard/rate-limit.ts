@@ -1,5 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm'
-import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { Db } from '@/db/types'
 import { rateLimits } from '@/db/schema'
 
 export type RateLimitResult = Readonly<{
@@ -7,7 +7,7 @@ export type RateLimitResult = Readonly<{
   remaining: number
   /** Seconds until the current window ends; only meaningful when `allowed` is false. */
   retryAfterSec: number
-  /** Start of the counting window (epoch ms); pass it to {@link refundRateLimit}. */
+  /** Start of the counting window (epoch ms); pass it to {@link returnAttempt}. */
   windowStart: number
 }>
 
@@ -24,7 +24,6 @@ export type RateLimitInput = Readonly<{
  * requests cannot lose updates. Throws if the database is unreachable: callers must fail closed.
  */
 export async function rateLimit(
-  // The schema generic is irrelevant here: only the rate_limits table is touched.
   db: Db,
   { key, limit, windowSec, now = Date.now() }: RateLimitInput,
 ): Promise<RateLimitResult> {
@@ -49,10 +48,8 @@ export async function rateLimit(
   }
 }
 
-type Db = NodePgDatabase<Record<string, unknown>>
-
-/** Give one attempt back (never below zero), e.g. when a login succeeded after being counted. */
-export async function refundRateLimit(
+/** Give one counted attempt back (never below zero), e.g. when a login succeeded after being counted. */
+export async function returnAttempt(
   db: Db,
   { key, windowStart }: Readonly<{ key: string; windowStart: number }>,
 ): Promise<void> {

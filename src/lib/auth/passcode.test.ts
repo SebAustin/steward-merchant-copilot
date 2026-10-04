@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { passcodeMatches } from './passcode'
+import { passcodeGeneration, passcodeMatches } from './passcode'
 
 describe('passcodeMatches', () => {
   it('accepts the exact passcode only', () => {
@@ -17,5 +17,17 @@ describe('passcodeMatches', () => {
   it('never grants access when no passcode is configured', () => {
     expect(passcodeMatches('', '')).toBe(false)
     expect(passcodeMatches('anything', '')).toBe(false)
+  })
+})
+
+describe('passcodeGeneration', () => {
+  it('changes when the passcode or the secret changes, and is stable otherwise', () => {
+    const secret = 's'.repeat(40)
+    const gen = passcodeGeneration('espresso-2026', secret)
+
+    expect(passcodeGeneration('espresso-2026', secret)).toBe(gen)
+    expect(passcodeGeneration('espresso-2027', secret)).not.toBe(gen)
+    expect(passcodeGeneration('espresso-2026', 't'.repeat(40))).not.toBe(gen)
+    expect(gen).not.toContain('espresso')
   })
 })

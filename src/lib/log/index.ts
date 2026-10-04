@@ -1,7 +1,9 @@
 import pino from 'pino'
+import { logLevel } from '@/lib/env/parse'
 import { redact } from './redact'
 
-const level = process.env.LOG_LEVEL ?? 'info'
+// An invalid LOG_LEVEL falls back to info here; parseEnv reports it at startup.
+const level = logLevel.catch('info').parse(process.env.LOG_LEVEL || undefined)
 
 const base = pino({ level, base: { service: 'steward' } })
 

@@ -12,11 +12,18 @@ import {
   unique,
 } from 'drizzle-orm/pg-core'
 
-/** One row per signed-in browser session. Only a hash of the session id is stored. */
+/**
+ * One row per signed-in browser session; only a hash of the session id is stored. Route handlers
+ * accept a cookie only while its row exists, is unexpired and carries the current passcode
+ * generation, so sign-out and a passcode change both take effect server-side.
+ */
 export const sessions = pgTable('sessions', {
   idHash: text('id_hash').primaryKey(),
   tokensUsed: integer('tokens_used').notNull().default(0),
+  /** Tag of the DEMO_PASSCODE this session was issued under (see lib/auth passcodeGeneration). */
+  passcodeGen: text('passcode_gen').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })
 
 /** Fixed-window request counters (passcode attempts, per-route limits). */
@@ -68,7 +75,10 @@ export const apiSpend = pgTable(
   },
   (t) => [
     unique('api_spend_run_call_unique').on(t.runId, t.callId),
-    check('api_spend_scope_valid', sql`${t.scope} IN ('demo', 'eval', 'dev')`),
+    check(
+      'api_spend_scope_valid',
+      sql`${t.scope} IN (${sql.raw(SPEND_SCOPES.map((scope) => `'${scope}'`).join(', '))})`,
+    ),
     check('api_spend_cost_nonnegative', sql`${t.costUsd} >= 0`),
   ],
 )

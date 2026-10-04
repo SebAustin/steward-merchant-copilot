@@ -15,3 +15,8 @@ export const testDb = (pool: pg.Pool) => drizzle(pool, { schema })
 
 /** Unique id so test files can share one database without truncating append-only tables. */
 export const uid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
+
+const hex16 = () => Math.floor(Math.random() * 0x10000).toString(16)
+
+/** A random IPv6 address in the documentation range; each one lands in its own /64 rate-limit bucket. */
+export const randomIp = () => `2001:db8:${hex16()}:${hex16()}::1`

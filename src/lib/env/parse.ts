@@ -2,12 +2,9 @@ import { z } from 'zod'
 
 /** Thrown when the process environment is invalid. Names variables, never their values. */
 export class EnvError extends Error {
-  readonly variables: readonly string[]
-
-  constructor(variables: readonly string[], details: readonly string[]) {
+  constructor(details: readonly string[]) {
     super(`Invalid environment:\n${details.map((d) => `  - ${d}`).join('\n')}`)
     this.name = 'EnvError'
-    this.variables = variables
   }
 }
 
@@ -16,6 +13,14 @@ const PLACEHOLDER_MARKERS = ['change-me', 'replace-with'] as const
 /** Public by design (domain-locked AG Grid license); the only secret-looking NEXT_PUBLIC_ name allowed. */
 const PUBLIC_ALLOWLIST: ReadonlySet<string> = new Set(['NEXT_PUBLIC_AG_GRID_LICENSE_KEY'])
 const SECRET_NAME_PATTERN = /(SECRET|TOKEN|PASSWORD|PASSCODE|PRIVATE|CREDENTIAL|API_?KEY)/i
+
+export const DISPUTE_SOURCES = ['live', 'simulated', 'mixed'] as const
+export type DisputeSource = (typeof DISPUTE_SOURCES)[number]
+
+/** Also used by the logger, which must not depend on the full environment being valid. */
+export const logLevel = z
+  .enum(['silent', 'fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+  .default('info')
 
 const optionalString = z.string().min(1).optional()
 const capUsd = (fallback: number) => z.coerce.number().positive().default(fallback)
@@ -27,7 +32,7 @@ const flag = z
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   RENDER: optionalString,
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: logLevel,
   /** Reverse-proxy hops in front of the app, used to pick the client IP from X-Forwarded-For. */
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
 
@@ -46,7 +51,7 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(MIN_SESSION_SECRET_LENGTH),
   CRON_SECRET: optionalString,
 
-  DISPUTE_SOURCE: z.enum(['live', 'simulated', 'mixed']).default('simulated'),
+  DISPUTE_SOURCE: z.enum(DISPUTE_SOURCES).default('simulated'),
   POLICIES_ENABLED: flag,
   NEXT_PUBLIC_AG_GRID_LICENSE_KEY: optionalString,
 
@@ -110,16 +115,12 @@ export function parseEnv(raw: Record<string, string | undefined>): Env {
 
   if (!parsed.success) {
     const details = parsed.error.issues.map((i) => `${String(i.path[0] ?? 'env')}: ${i.message}`)
-    const names = parsed.error.issues.map((i) => String(i.path[0] ?? 'env'))
-    throw new EnvError(names, details)
+    throw new EnvError(details)
   }
 
   const issues = crossFieldIssues(cleaned, parsed.data)
   if (issues.length > 0) {
-    throw new EnvError(
-      issues.map((i) => i.name),
-      issues.map((i) => `${i.name}: ${i.message}`),
-    )
+    throw new EnvError(issues.map((i) => `${i.name}: ${i.message}`))
   }
   return Object.freeze(parsed.data)
 }

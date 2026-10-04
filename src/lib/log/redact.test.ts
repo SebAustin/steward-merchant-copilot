@@ -44,9 +44,24 @@ describe('redact', () => {
     expect(redact(input)).toEqual(input)
   })
 
-  it('handles errors without leaking stack paths or secrets in the message', () => {
-    const out = redact({ err: new Error('boom for dana@example.com') })
+  it('keeps an error name, code, cause and stack, but scrubs secrets inside them', () => {
+    const cause = Object.assign(new Error('connect to postgres://app:hunter2@db:5432/x failed'), {
+      code: 'ECONNREFUSED',
+    })
+    const error = new Error('boom for dana@example.com', { cause })
 
-    expect(out.err).toEqual({ name: 'Error', message: expect.stringMatching(/^boom for email:/) })
+    const out = redact({ err: error }).err as unknown as Record<string, unknown>
+
+    expect(out).toMatchObject({ name: 'Error', message: expect.stringMatching(/^boom for email:/) })
+    expect(String(out.stack)).toContain('redact.test.ts')
+    expect(String(out.stack)).not.toContain('dana@example.com')
+    expect(out.cause).toMatchObject({ code: 'ECONNREFUSED' })
+    expect(JSON.stringify(out)).not.toContain('hunter2')
+  })
+
+  it('scrubs credentials embedded in connection URLs', () => {
+    expect(redact({ msg: 'at postgres://user:p%40ss@host:5432/db?sslmode=require' }).msg).toBe(
+      'at postgres://user:[redacted]@host:5432/db?sslmode=require',
+    )
   })
 })

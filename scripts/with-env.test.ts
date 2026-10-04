@@ -12,7 +12,7 @@ function read(content: string, name: string, base: Record<string, string> = {}):
   const file = join(mkdtempSync(join(tmpdir(), 'withenv-')), 'env')
   writeFileSync(file, content)
   const result = spawnSync('bash', [SCRIPT, file, 'printenv', name], {
-    env: { PATH: process.env.PATH ?? '', ...base },
+    env: { PATH: process.env.PATH ?? '', NODE_ENV: 'test', ...base },
     encoding: 'utf8',
   })
   return result.stdout.replace(/\n$/, '')

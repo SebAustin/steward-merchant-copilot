@@ -1,14 +1,14 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { EnterForm } from '@/features/enter/ui/EnterForm'
-import { getPageSession } from '@/lib/auth/page'
+import { hasPageSession } from '@/lib/auth'
 import styles from './enter.module.css'
 
 export const metadata: Metadata = { title: 'Enter' }
 
 export default async function EnterPage() {
   // proxy.ts already bounces signed-in visitors; this keeps the page correct on its own.
-  if (await getPageSession()) redirect('/')
+  if (await hasPageSession()) redirect('/')
   return (
     <main className={styles.cover}>
       <div className={styles.sheet}>
