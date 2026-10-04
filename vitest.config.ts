@@ -15,7 +15,6 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'test/**/*.test.ts', 'scripts/**/*.test.ts'],
     exclude: ['test/e2e/**', 'node_modules/**'],
     globalSetup: ['./test/setup/global.ts'],
-    setupFiles: ['./test/setup/env.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'text', 'lcov'],

@@ -7,8 +7,12 @@ set -euo pipefail
 file="$1"
 shift
 
-while IFS='=' read -r key value; do
-  [[ -z "$key" || "$key" == \#* ]] && continue
+# `|| [[ -n $line ]]` keeps a final line that has no trailing newline.
+while IFS= read -r line || [[ -n "$line" ]]; do
+  line="${line%$'\r'}"
+  [[ -z "${line//[[:space:]]/}" || "$line" == \#* ]] && continue
+  key="${line%%=*}"
+  value="${line#*=}"
   if [[ -z "${!key+x}" ]]; then
     export "$key=$value"
   fi

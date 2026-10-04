@@ -2,8 +2,9 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import pg from 'pg'
 import * as schema from '../../src/db/schema'
 
-export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://steward:steward@localhost:54329/steward_test'
+import { TEST_DATABASE_URL } from './config'
+
+export { TEST_DATABASE_URL }
 
 /** A pool on the migrated test database. Callers must `await pool.end()` in afterAll. */
 export function testPool(connectionString = TEST_DATABASE_URL): pg.Pool {

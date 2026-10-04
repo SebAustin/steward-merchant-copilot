@@ -3,10 +3,12 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { TEST_DATABASE_URL, testPool, uid } from '../../test/setup/db'
 
+// A role per run keeps parallel or aborted runs from colliding on a cluster-wide name.
+const ROLE = `steward_eval_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`
 const GRANTS = readFileSync(
   fileURLToPath(new URL('../../scripts/sql/steward_eval_grants.sql', import.meta.url)),
   'utf8',
-)
+).replaceAll('steward_eval', ROLE)
 const PASSWORD = uid('pw')
 
 const admin = testPool()
@@ -14,22 +16,19 @@ let evalPool: ReturnType<typeof testPool>
 
 beforeAll(async () => {
   // The owner creates the role (with a real password) once; the grants script is idempotent.
-  await admin.query(`DROP ROLE IF EXISTS steward_eval`).catch(async () => {
-    await admin.query('REASSIGN OWNED BY steward_eval TO CURRENT_USER; DROP OWNED BY steward_eval')
-    await admin.query('DROP ROLE steward_eval')
-  })
-  await admin.query(`CREATE ROLE steward_eval LOGIN PASSWORD '${PASSWORD}'`)
+  await admin.query(`CREATE ROLE ${ROLE} LOGIN PASSWORD '${PASSWORD}'`)
   await admin.query(GRANTS)
   await admin.query(GRANTS)
 
   const url = new URL(TEST_DATABASE_URL)
-  url.username = 'steward_eval'
+  url.username = ROLE
   url.password = PASSWORD
   evalPool = testPool(url.toString())
 })
 
 afterAll(async () => {
   await evalPool.end()
+  await admin.query(`DROP OWNED BY ${ROLE}; DROP ROLE ${ROLE}`)
   await admin.end()
 })
 
