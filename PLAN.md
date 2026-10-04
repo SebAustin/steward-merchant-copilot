@@ -23,7 +23,7 @@ Dates: today 2026-10-03; v0.5 tag Nov 6 (A-14); feature freeze Nov 8; submit Nov
 | F13 | Render free Postgres expires after 30 days; free web sleeps after 15 min | Render docs (verified) | D-10: Postgres `basic-256mb` from slice 1, web `starter` from v0.5 |
 | F14 | Model prices | AI-QUALITY §6 (verified against Anthropic pricing docs 2026-10-03) | Versioned price table in config |
 
-**Probes.** Credential-free probes run in 0.1a. Credentialed probes run when the project owner's `.env` exists (0.1c, R13); `scripts/probe.ts` prints a redacted report, appended to this section before dependent code is written. Until a kind is probed, `requestIdReplaySafe=false` (R21). **Results: pending credentials** (P0-5/6/8 recorded in 0.1a).
+**Probes.** Credential-free probes run in 0.1a. Credentialed probes run when the project owner's `.env` exists (0.1c, R13); `scripts/probe.ts` prints a redacted report, appended to this section before dependent code is written. Until a kind is probed, `requestIdReplaySafe=false` (R21). **Results:** P0-5, P0-6 (local part) and P0-8 are recorded below (0.1a); the credentialed probes are pending credentials.
 
 | Probe | Check | Branch if it fails |
 |---|---|---|
@@ -37,6 +37,16 @@ Dates: today 2026-10-03; v0.5 tag Nov 6 (A-14); feature freeze Nov 8; submit Nov
 | P0-7 Sandbox Dispute lifecycle (cred, probe Dispute #1, Oct 6 onward) | Initial status, seller window length, auto-close/escalation, `/require-evidence` effect | Window < 10 d or auto-close -> recording may use SIM Disputes, labeled |
 | P0-8 MSW interception (free, 0.1a) | MSW `setupServer` in a Next 16 server intercepts server `fetch` and the toolkit's HTTP client | E2E mocks at the `ReadPort` seam behind `callRead`; T8 changes only |
 | P0-9 Webhook delivery (cred, 0.5a) | `record-payment` emits `INVOICING.INVOICE.PAID`? API refund emits `PAYMENT.CAPTURE.REFUNDED`? | Paid-Invoice expiry relies on `revalidate` (I5); live demo uses the refund event |
+
+**Probe results, slice 0.1a (2026-10-03).**
+
+| Probe | Result | Consequence |
+|---|---|---|
+| P0-5 Local tools | **Pass.** Node 24.21.0 and pnpm 10.34.6 used for every gate run (the dev machine defaults to Node 26.7.0 and pnpm 9.15.9, so `.nvmrc`, `engines` and `packageManager` pin 24 and 10; CI reads them). Docker 29.8.1, `docker compose` v5.5.1; Postgres 17 container healthy. Playwright 1.63 Chromium installs and runs. `psql` is not installed locally (use `docker compose exec postgres psql`) | Compose maps Postgres to host port 54329 (5433 was taken). No fallback needed |
+| P0-6 Render | **Pass locally; Render side pending owner.** `render.yaml` validates against Render's published JSON schema (`render.com/schema/render.yaml.json`, checked with ajv; a bad plan name is rejected, so the check is not vacuous): Node `NODE_VERSION=24`, `autoDeployTrigger: checksPass`, Postgres 17 `basic-256mb`, env group with `sync: false` secrets. Role `steward_eval` (`scripts/sql/steward_eval_grants.sql`) verified on Postgres 17: `INSERT, SELECT` on `api_spend` plus its sequence only; `UPDATE`, `DELETE`, `TRUNCATE` and every other table are denied (`src/db/steward-eval-role.test.ts`). **Pending owner:** Blueprint sync accepted by Render, `CREATE ROLE steward_eval` on the Render Postgres, and an Actions job connecting with `EVAL_DATABASE_URL`; also confirm Render's `X-Forwarded-For` shape against `TRUSTED_PROXY_HOPS=1` | If Render rejects `autoDeployTrigger`, use `autoDeploy: true` plus branch protection. If Actions cannot reach the database, eval jobs run locally only |
+| P0-8 MSW interception | **Pass.** With `NODE_OPTIONS="--import ./test/msw/register.mjs"` on `next start` (Next 16.3.8, Node 24), MSW `setupServer` intercepted both a plain server `fetch` in a route handler and `list_invoices` from `@paypal/agent-toolkit@1.11.0` run inside the same route (it uses axios over Node `http`); no `serverExternalPackages` entry was needed. The toolkit authenticates against **`api.sandbox.paypal.com`** but calls resources on **`api-m.sandbox.paypal.com`**, so every handler is registered on both hosts (`test/msw/handlers.ts`). A request with no handler does not fail cleanly: MSW's passthrough crashed with `unhandledRejection: Headers.append: "AI-SDK, Version" is an invalid header name` (the toolkit's `User-Agent` contains `, `) and the request hung | The `ReadPort` fallback is not needed. 0.1b must keep handler coverage complete for every endpoint a test touches, and treat an MSW warning as a failure. Note: the `--import` path must be relative (the repo path contains spaces and `NODE_OPTIONS` splits on them) |
+
+Other facts found while scaffolding: the toolkit's `openai@4.86.1` dependency declares a `zod@^3` peer and pnpm reports it unmet (the nested `zod@3` is used; our `zod@4` is separate); Next 16 rejects a relative `Location` from `proxy.ts` (`NextResponse.redirect` needs an absolute URL); `node --env-file` cannot be used for `next build` (Next workers reject `--env-file` in `NODE_OPTIONS`), so `scripts/with-env.sh` loads `.env.ci`.
 
 **Credentials (verify commands in ASSUMPTIONS §1; the agency never enters any).**
 
@@ -142,7 +152,7 @@ Seams exist only where two adapters exist: **PayPal HTTP** (sandbox vs MSW), **d
 
 | Module | Interface | Invariants | Test seam |
 |---|---|---|---|
-| `lib/env` | `env` (parsed once, `server-only`); `parseEnv(raw)` | `PAYPAL_ENV` = `z.literal('sandbox')` (NG1); placeholders allowed so a credential-free deploy boots into "Couldn't reach PayPal"; `AI_PROVIDER` defaults to `mock` in `.env.example`, `mock` rejected when `RENDER` is set; no secret under `NEXT_PUBLIC_` | Pure unit |
+| `lib/env` | `getEnv()` (parsed once on first use, `server-only`); `parseEnv(raw)` | `PAYPAL_ENV` = `z.literal('sandbox')` (NG1); placeholders allowed so a credential-free deploy boots into "Couldn't reach PayPal"; `AI_PROVIDER` defaults to `mock` in `.env.example`, `mock` rejected when `RENDER` is set; no secret under `NEXT_PUBLIC_` | Pure unit |
 | `lib/paypal/rest` | `paypalFetch<T>({method, path, body?, multipart?, requestId?, schema, timeoutMs=20000})` -> `T` or `PayPalError{kind, status, debugId, sent}`. `writes.ts`: `sendInvoiceReminder`, `provideDisputeEvidence`, `acceptDisputeClaim`, `refundCapture`. `topup-orders.ts`: `createAndCaptureCardOrder`. `seed-writes.ts`: §2 boundary (3) list. `webhooks.ts` | Token cached to `expires_in - 60 s`, single-flight, one retry on 401; retries only when known not processed (`sent=false`, 429, 5xx with a no-processing body), max 3, jittered backoff, `Retry-After`; whole call ≤ 60 s; same Request-Id every attempt; sandbox base URL hard-coded; redacted logs | MSW per endpoint; recorded-response contract tests |
 | `lib/paypal/toolkit` | `callRead<T>(name, args, schema): Result<T, ToolError>`; `getReadTools(ledger): ToolSet` | `READ_TOOL_ALLOWLIST` = `list_invoices`, `get_invoice`, `search_invoicing`, `get_order`, `list_disputes`, `get_dispute`, `list_transactions`, `get_refund`, `get_shipment_tracking` (spike `getTools()`); read-only config **and** name filter; results zod-validated, ledgered, fenced | Snapshot = allow-list; MSW |
 | `lib/untrusted` | `normalize(text, field)`, `fence(text, meta): FencedText` | Implements AI-QUALITY §3 exactly; prompt builders accept Untrusted Text only as `FencedText` | fast-check |
@@ -179,7 +189,7 @@ Seams exist only where two adapters exist: **PayPal HTTP** (sandbox vs MSW), **d
 | `standing_policies` / `policy_runs` | caps / `trigger`, `created`, `skipped`, `capped` | `CHECK kind='invoice_reminder'`, `max_per_run BETWEEN 1 AND 5`, `enabled DEFAULT false` |
 | `ai_runs` | Fields per AI-QUALITY §6 + `scope`, `reserved_usd`, `reserved_at`, `settled_at` | Telemetry panel filters `scope='demo'`; eval `ai_runs` stay in the local/CI DB |
 | `api_spend` (R34) | `id bigserial`, `scope` (demo\|eval\|dev), `run_id`, `call_id`, `cost_usd`, `created_at` | `UNIQUE(run_id, call_id)`; UPDATE/DELETE trigger raises; `steward_eval`: `INSERT, SELECT` + sequence `USAGE` only |
-| `spend_days` / `sessions` / `rate_limits` / `demo_state` | `day PK, reserved_usd, spent_usd` / hashed id, CSRF hash, `tokens_used` / `(key, window_start)` / `epoch`, `last_reset_at`, `resets_today`, `topups_today` | Locks per R22 / R19 |
+| `spend_days` / `sessions` / `rate_limits` / `demo_state` | `day PK, reserved_usd, spent_usd` / hashed id, `tokens_used` (the CSRF token is an HMAC of the session id, so none is stored) / `(key, window_start)` / `epoch`, `last_reset_at`, `resets_today`, `topups_today` | Locks per R22 / R19 |
 
 ```mermaid
 stateDiagram-v2
