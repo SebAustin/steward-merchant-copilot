@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { NETWORK_ERROR_MESSAGE, errorMessage } from '@/lib/http/client'
+import { NETWORK_ERROR_MESSAGE, errorMessage, isSignedOut } from '@/lib/http/client'
 import styles from './Masthead.module.css'
 
 /** Ends the session: DELETE /api/session with the CSRF token (same-site Origin is automatic). */
@@ -19,7 +19,7 @@ export function SignOutButton({ csrfToken }: Readonly<{ csrfToken: string }>) {
         method: 'DELETE',
         headers: { 'x-csrf-token': csrfToken },
       })
-      if (response.ok) {
+      if (isSignedOut(response)) {
         router.replace('/enter')
         router.refresh()
         return
