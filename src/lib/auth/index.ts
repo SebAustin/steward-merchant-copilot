@@ -8,6 +8,7 @@ import { sessions } from '@/db/schema'
 import type { Db } from '@/db/types'
 import { getEnv, type Env } from '@/lib/env'
 import { rateLimit, returnAttempt } from '@/lib/guard/rate-limit'
+import { log } from '@/lib/log'
 import { SESSION_COOKIE, parseCookies, sessionCookieAttributes } from './cookie'
 import { CSRF_HEADER, csrfTokenFor, isSameOrigin, verifyCsrf } from './csrf'
 import { passcodeGeneration, passcodeMatches } from './passcode'
@@ -178,18 +179,49 @@ export async function requireSession(
   return { ok: true, session, csrfToken: csrfTokenFor(session.sid, deps.env.SESSION_SECRET) }
 }
 
-/** For server components: the session and its CSRF token, or a redirect to the passcode page. */
+/** Thrown to the error boundary when the session store cannot be reached (never an auth decision). */
+export class AuthUnavailableError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('Session store unavailable', options)
+    this.name = 'AuthUnavailableError'
+  }
+}
+
+/** Authenticate the page's cookie; a database failure is logged with a request id and rethrown typed. */
+async function authenticatePage(deps: AuthDeps): Promise<Session | null> {
+  const raw = (await cookies()).get(SESSION_COOKIE)?.value
+  try {
+    return await authenticate(raw, deps)
+  } catch (error) {
+    log.warn({ requestId: crypto.randomUUID(), error }, 'session check failed')
+    throw new AuthUnavailableError({ cause: error })
+  }
+}
+
+/**
+ * For server components: the session and its CSRF token, or a redirect to the passcode page.
+ * Throws {@link AuthUnavailableError} when the database is down, for the error boundary to show.
+ */
 export async function requirePageSession(
   deps: AuthDeps = defaultDeps(),
 ): Promise<Readonly<{ session: Session; csrfToken: string }>> {
-  const session = await authenticate((await cookies()).get(SESSION_COOKIE)?.value, deps)
+  // The redirect stays outside the try: Next implements it as a thrown error.
+  const session = await authenticatePage(deps)
   if (!session) redirect('/enter')
   return { session, csrfToken: csrfTokenFor(session.sid, deps.env.SESSION_SECRET) }
 }
 
-/** The passcode page's own check: signed in already? Does not redirect. */
+/**
+ * The passcode page's own check: signed in already? Does not redirect. With the database down it
+ * answers false, so the form still renders and the login POST fails closed with a friendly 503.
+ */
 export async function hasPageSession(deps: AuthDeps = defaultDeps()): Promise<boolean> {
-  return (await authenticate((await cookies()).get(SESSION_COOKIE)?.value, deps)) !== null
+  try {
+    return (await authenticatePage(deps)) !== null
+  } catch (error) {
+    if (error instanceof AuthUnavailableError) return false
+    throw error
+  }
 }
 
 /** Same-site check for requests that have no session yet (the login POST). */

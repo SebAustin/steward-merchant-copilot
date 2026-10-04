@@ -21,7 +21,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "e2e": "playwright test",
+    "e2e": "bash scripts/with-env.sh .env.ci playwright test",
     "db:up": "docker compose up -d --wait postgres",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node scripts/migrate.ts"
