@@ -11,7 +11,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: '/policies', label: 'Policies', title: 'Standing Policies' },
 ]
 
-/** The four items of the mobile bottom bar; the rest sit under "More". */
+/** Mobile bottom bar: these two tabs sit beside Ask; the remaining pages go under "More". */
 export const BOTTOM_PRIMARY: readonly NavItem[] = NAV_ITEMS.slice(0, 2)
 export const BOTTOM_MORE: readonly NavItem[] = NAV_ITEMS.slice(2)
 

@@ -1,10 +1,9 @@
 import type { Metadata } from 'next'
+import { DISPUTE_SOURCE_LABEL } from '@/features/shell/dispute-source'
 import { getEnv } from '@/lib/env'
 import styles from './settings.module.css'
 
 export const metadata: Metadata = { title: 'Settings' }
-
-const SOURCE_LABEL = { live: 'Live', simulated: 'Simulated', mixed: 'Mixed' } as const
 
 export default function SettingsPage() {
   const source = getEnv().DISPUTE_SOURCE
@@ -15,7 +14,7 @@ export default function SettingsPage() {
         <div className={styles.row}>
           <dt>Dispute source</dt>
           <dd>
-            <strong>{SOURCE_LABEL[source]}</strong>
+            <strong>{DISPUTE_SOURCE_LABEL[source]}</strong>
             <span className={styles.hint}>
               Set by the DISPUTE_SOURCE environment setting; it can&apos;t be changed here.
             </span>

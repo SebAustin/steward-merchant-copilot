@@ -1,21 +1,15 @@
 import Link from 'next/link'
+import { DISPUTE_SOURCE_CHIP, type DisputeSource } from '../dispute-source'
+import { MERCHANT_NAME } from '../merchant'
 import { SignOutButton } from './SignOutButton'
 import { IndexTabs } from './Navigation'
 import styles from './Masthead.module.css'
-
-type DisputeSource = 'live' | 'simulated' | 'mixed'
-
-const SOURCE_CHIP: Readonly<Record<DisputeSource, string | null>> = {
-  live: null,
-  simulated: 'Simulated disputes',
-  mixed: 'Some disputes simulated',
-}
 
 type MastheadProps = Readonly<{ disputeSource: DisputeSource; csrfToken: string }>
 
 /** Sticky masthead: wordmark, index tabs, Sandbox chip, data-source chip, Maya menu (DESIGN section 3). */
 export function Masthead({ disputeSource, csrfToken }: MastheadProps) {
-  const sourceChip = SOURCE_CHIP[disputeSource]
+  const sourceChip = DISPUTE_SOURCE_CHIP[disputeSource]
   return (
     <header className={styles.masthead}>
       <Link href="/" className={styles.wordmark}>
@@ -42,7 +36,7 @@ export function Masthead({ disputeSource, csrfToken }: MastheadProps) {
           Ask Steward
         </button>
         <details className={styles.menu}>
-          <summary className={styles.menuSummary}>Maya</summary>
+          <summary className={styles.menuSummary}>{MERCHANT_NAME}</summary>
           <div className={styles.menuPanel}>
             <Link href="/settings" className={styles.menuButton}>
               Settings

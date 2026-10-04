@@ -5,7 +5,7 @@ import { parse } from 'yaml'
 
 type EnvVar = { key?: string; value?: string; sync?: boolean; generateValue?: boolean }
 type Blueprint = {
-  databases: { plan: string }[]
+  databases: { plan: string; diskSizeGB?: number }[]
   services: { type: string; runtime: string; healthCheckPath: string; envVars: EnvVar[] }[]
   envVarGroups: { name: string; envVars: EnvVar[] }[]
 }
@@ -38,6 +38,10 @@ describe('render.yaml Blueprint (SC-18)', () => {
 
   it('uses a paid Postgres (free databases expire after 30 days, D-10)', () => {
     expect(blueprint.databases[0]?.plan).toMatch(/^basic-/)
+  })
+
+  it('sets the database disk size explicitly (no surprise storage bill)', () => {
+    expect(blueprint.databases[0]?.diskSizeGB).toBeGreaterThanOrEqual(1)
   })
 
   it('names a real model provider, because the mock is rejected on Render', () => {

@@ -10,6 +10,8 @@ databases:
   - name: steward-db
     plan: basic-256mb
     postgresMajorVersion: '17'
+    # Explicit so the disk never autoscales into a bigger bill than D-10 approved.
+    diskSizeGB: 1
     databaseName: steward
     user: steward
     region: oregon

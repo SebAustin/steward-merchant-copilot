@@ -16,7 +16,7 @@ export function PageStub({ title, purpose, eyebrow }: PageStubProps) {
       {eyebrow ? <p className={styles.eyebrow}>{eyebrow}</p> : null}
       <h1 className={styles.title}>{title}</h1>
       <p className={styles.purpose}>{purpose}</p>
-      <Notice title="Couldn't reach PayPal." retryHref="?retry=1">
+      <Notice title="Couldn't reach PayPal." canRetry>
         Steward hasn&apos;t saved a view of your account yet, so there is nothing to show here.
       </Notice>
     </div>

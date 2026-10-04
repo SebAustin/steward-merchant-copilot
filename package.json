@@ -27,7 +27,6 @@
     "db:migrate": "node scripts/migrate.ts"
   },
   "dependencies": {
-    "@paypal/agent-toolkit": "1.11.0",
     "drizzle-orm": "^0.45.3",
     "next": "16.3.8",
     "pg": "^8.23.1",
@@ -39,6 +38,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@paypal/agent-toolkit": "1.11.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.19.1",
     "@types/pg": "^8.23.1",

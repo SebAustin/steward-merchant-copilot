@@ -1,5 +1,6 @@
+import { MERCHANT_NAME } from '@/features/shell/merchant'
+
 const MERCHANT_TIME_ZONE = 'America/Los_Angeles'
-const MERCHANT_NAME = 'Maya'
 const NOON = 12
 const EVENING_START = 17
 

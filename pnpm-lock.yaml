@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@paypal/agent-toolkit':
-        specifier: 1.11.0
-        version: 1.11.0(react@19.2.8)
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@opentelemetry/api@1.9.0)(@types/pg@8.23.1)(pg@8.23.1)
@@ -39,6 +36,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.13.0
         version: 4.13.0(playwright-core@1.63.0)
+      '@paypal/agent-toolkit':
+        specifier: 1.11.0
+        version: 1.11.0(react@19.2.8)
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
