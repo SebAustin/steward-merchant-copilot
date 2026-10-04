@@ -1,7 +1,10 @@
 import 'server-only'
+import { after } from 'next/server'
 import { getDb } from '@/db'
 import { requestClientBucket } from '@/lib/http/client-key'
 import { jsonError } from '@/lib/http/respond'
+import { log } from '@/lib/log'
+import { maybePrune } from './prune'
 import { rateLimit } from './rate-limit'
 
 const ROUTE_LIMIT = 60
@@ -22,6 +25,10 @@ export async function enforceRouteLimit(
     limit: ROUTE_LIMIT,
     windowSec: ROUTE_WINDOW_SEC,
   })
+  // Every request is a chance to prune, so rotating client addresses cannot outgrow the table.
+  after(() =>
+    maybePrune(getDb()).catch((error: unknown) => log.warn({ requestId, error }, 'prune failed')),
+  )
   if (result.allowed) return null
   return jsonError({
     status: 429,

@@ -1,10 +1,8 @@
-import { after, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getDb } from '@/db'
 import { clearedSessionCookie, isSameSiteRequest, login, logout, requireSession } from '@/lib/auth'
 import { getEnv } from '@/lib/env'
 import { enforceRouteLimit } from '@/lib/guard/route-limit'
-import { maybePrune } from '@/lib/guard/prune'
 import { requestClientBucket } from '@/lib/http/client-key'
 import type { ErrorCode } from '@/lib/http/messages'
 import { jsonError } from '@/lib/http/respond'
@@ -43,9 +41,6 @@ export async function POST(request: Request): Promise<Response> {
       })
     }
 
-    after(() =>
-      maybePrune(getDb()).catch((error: unknown) => log.warn({ requestId, error }, 'prune failed')),
-    )
     const response = NextResponse.json({ ok: true })
     const { name, value, options } = result.cookie
     response.cookies.set(name, value, options)
