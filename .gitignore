@@ -11,3 +11,4 @@ test-results/
 *.tsbuildinfo
 .DS_Store
 next-env.d.ts
+.claude/
