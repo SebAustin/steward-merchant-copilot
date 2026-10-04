@@ -1,0 +1,93 @@
+/* Design tokens: docs/DESIGN.md section 2 ("The Roaster's Logbook"). Light only; night theme is cut. */
+:root {
+  /* Surfaces */
+  --color-paper: #f6f0e4; /* page */
+  --color-surface: #fbf7ee; /* grid, drawer, dialog */
+  --color-sunk: #efe7d6; /* grid header, inputs */
+  --color-quarantine: #ede5d3; /* Untrusted Text fence fill */
+  /* Ink */
+  --color-ink: #2a1d16; /* primary text */
+  --color-ink-muted: #5e4c40; /* secondary text, labels */
+  --color-line: #d9cdb8; /* decorative rules only */
+  --color-line-strong: #8c7a68; /* control borders, 3:1 non-text */
+  /* Signal = "needs you" */
+  --color-signal: #b8330a; /* Ember */
+  --color-signal-strong: #922806; /* hover/active */
+  --color-signal-ink: #fffbf2; /* text on signal */
+  --color-signal-wash: #fbe6d8; /* new-row highlight, hover tint */
+  /* Risk (always paired with glyph + word) */
+  --color-risk-low: #2f6b3a;
+  --color-risk-low-bg: #dce9d5;
+  --color-risk-med: #8a5a00;
+  --color-risk-med-bg: #f5e6c4;
+  --color-risk-high: #8e1f3a;
+  --color-risk-high-bg: #f4dde0;
+  /* Steward / AI / focus */
+  --color-steward: #2b4c6f; /* indigo ink: AI status, links, focus ring */
+
+  /* Type (next/font sets --font-fraunces and --font-plex-mono on <html>) */
+  --font-serif: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+  --text-xs: clamp(0.75rem, 0.73rem + 0.08vw, 0.8125rem); /* 12-13  labels, mono caps */
+  --text-sm: clamp(0.8125rem, 0.79rem + 0.12vw, 0.9rem); /* 13-14.4 grid cells */
+  --text-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1.0625rem); /* 15-17  prose */
+  --text-lg: clamp(1.125rem, 1.05rem + 0.4vw, 1.375rem); /* 18-22  section heads */
+  --text-xl: clamp(1.5rem, 1.2rem + 1.4vw, 2.25rem); /* 24-36  page titles */
+  --text-hero: clamp(2.5rem, 1.4rem + 4.6vw, 5rem); /* 40-80  the one big figure */
+  --leading-tight: 1.1;
+  --leading-body: 1.5;
+  --tracking-caps: 0.06em;
+
+  /* Spacing: 4px base, uneven rhythm (tight in tables, generous around the hero figure) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+  --space-section: clamp(2rem, 1.2rem + 3vw, 4.5rem);
+  --gutter: clamp(1rem, 0.6rem + 2vw, 2.5rem);
+
+  /* Radius varies by role: grid / stamps+tags / controls / drawer+dialog / risk pill only */
+  --radius-rule: 0;
+  --radius-chip: 3px;
+  --radius-control: 6px;
+  --radius-sheet: 14px;
+  --radius-pill: 999px;
+
+  /* Elevation (warm shadows, never gray) */
+  --shadow-slip: 0 1px 0 var(--color-line);
+  --shadow-drawer: -12px 0 32px -12px rgb(42 29 22 / 0.22);
+  --shadow-dialog: 0 24px 64px -16px rgb(42 29 22 / 0.4), 0 2px 0 rgb(42 29 22 / 0.06);
+  --focus-ring: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-steward);
+
+  /* Motion: transform + opacity only */
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 420ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-stamp: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Layout */
+  --masthead-h: 56px;
+  --copilot-w: 380px;
+  --drawer-w: min(520px, 100vw);
+  --row-h: 52px;
+  --target-min: 44px;
+}
+
+@media (pointer: fine) {
+  :root {
+    --target-min: 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 1ms;
+    --duration-normal: 1ms;
+    --duration-slow: 1ms;
+  }
+}

@@ -60,3 +60,9 @@ These resolve the cross-document contradictions plan-critic found in round 1 (67
 | R37 | Merchant confirm (s5) | An audited Merchant "It didn't happen" counts as definitive absence, so retry is allowed with the same Request-Id. DESIGN copy stands. | PLAN |
 | R38 | Code-built refunds (s7) | `POST /api/refunds/propose` reads the order via `get_order` (the captures are inside `purchase_units`) and records the order + capture in a run ledger as `evidence_refs`. No model call, so there is **no explanation line**; DESIGN removes "Steward may add a short explanation line". | PLAN + DESIGN |
 | R39 | Housekeeping (s3, s4) | Owner calendar adds `STEWARD_URL`, the Render-side `CRON_SECRET`, and a recurring "go-ahead for each push/deploy". Remove the self-quoted critic projection from PLAN §1. | PLAN |
+
+# Slice 0.1a rework rulings
+
+| # | Topic | Ruling | Owner doc |
+|---|---|---|---|
+| R40 | Login limits | Only wrong passcode guesses count toward 5 per IP per 10 minutes: every attempt is counted before the check (so parallel guesses cannot outrun the limit) and a correct passcode is returned to the allowance. Successful logins are separately capped at 60 per IP per hour so session rows stay bounded; 60 leaves room for a judging room behind one NAT because rows expire and are pruned. Sessions are server-side rows with `expires_at` and a passcode generation; sign-out deletes the row, and rotating `DEMO_PASSCODE` evicts every session. | PLAN |

@@ -1,0 +1,22 @@
+/* Warm paper with faint ruled lines: a ledger page, not a card grid. */
+.main {
+  min-height: calc(100dvh - var(--masthead-h));
+  padding: var(--space-section) var(--gutter) calc(var(--space-section) + 56px);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--row-h) - 1px),
+    color-mix(in srgb, var(--color-line) 40%, transparent) calc(var(--row-h) - 1px),
+    color-mix(in srgb, var(--color-line) 40%, transparent) var(--row-h)
+  );
+}
+
+.main:focus {
+  outline: none;
+}
+
+@media (min-width: 768px) {
+  .main {
+    padding-bottom: var(--space-section);
+  }
+}

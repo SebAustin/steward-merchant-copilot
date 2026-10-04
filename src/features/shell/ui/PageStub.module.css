@@ -1,0 +1,23 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 46rem;
+}
+
+.eyebrow {
+  color: var(--color-ink-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-variation-settings: 'opsz' 96;
+}
+
+.purpose {
+  max-width: 38rem;
+  color: var(--color-ink-muted);
+}
